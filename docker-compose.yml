@@ -1,0 +1,7 @@
+services:
+  nats:
+    image: nats:latest
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    command: ["--auth", "a428978a-7bce-4bcb-a082-a760643edd00"]
