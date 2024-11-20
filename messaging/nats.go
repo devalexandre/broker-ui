@@ -1,4 +1,4 @@
-package natscli
+package messaging
 
 import (
 	"fmt"
@@ -35,10 +35,12 @@ func (n *Nats) Publish(subject string, data []byte) error {
 }
 
 // Subscribe subscribes to the given subject
-func (n *Nats) Subscribe(subject string, cb nats.MsgHandler) error {
+func (n *Nats) Subscribe(subject string, cb func([]byte)) error {
 	fmt.Println("Subscribing to subject: ", subject)
 
-	_, err := n.nc.Subscribe(subject, cb)
+	_, err := n.nc.Subscribe(subject, func(m *nats.Msg) {
+		cb(m.Data)
+	})
 	if err != nil {
 		fmt.Println("Error subscribing to subject: ", subject)
 		return err

@@ -1,4 +1,4 @@
-package dracula
+package themes
 
 import (
 	"image/color"
