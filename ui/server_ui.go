@@ -55,8 +55,6 @@ func AddServer(window fyne.Window, db *db.Database) {
 
 func DisplayServerOptions(window fyne.Window, database *db.Database, server db.Server) {
 	ClearTabs()
-	var topics []db.Topic
-	var subs []db.Sub
 
 	menu := container.NewHBox(
 		widget.NewButtonWithIcon("Add Topic", theme.ContentAddIcon(), func() {
@@ -93,21 +91,7 @@ func DisplayServerOptions(window fyne.Window, database *db.Database, server db.S
 	} else {
 		log.Printf("Connected to NATS server")
 		log.Printf("Selected server %v", server.ID)
-		topics = database.LoadTopics(server.ID)
-		subs = database.LoadSubs(server.ID)
-
-		database.Topics = topics
-		database.Subs = subs
-
-		TopicsDropdown = widget.NewSelect(GetTopicNames(database), func(topic string) {
-			log.Printf("Selected topic: %s", topic)
-		})
-		SubsDropdown = widget.NewSelect(GetSubNames(database), func(sub string) {
-			log.Printf("Selected sub: %s", sub)
-		})
-
-		panel.Add(TopicsDropdown)
-		panel.Add(SubsDropdown)
+		RefreshTopicsAndSubs(server.ID, database)
 	}
 
 	configTab := container.NewTabItem("Config", panel)
@@ -116,7 +100,7 @@ func DisplayServerOptions(window fyne.Window, database *db.Database, server db.S
 	TabContainer.Refresh()
 
 	AddDashboardTab(database)
-	AddTabsForTopicsAndSubs(database)
+	AddTabsForTopicsAndSubs(window, database, server.ID)
 }
 
 func ClearTabs() {
@@ -160,4 +144,12 @@ func EditServerConnection(window fyne.Window, db *db.Database, server db.Server)
 	)
 	dialog.Resize(fyne.NewSize(400, 200))
 	dialog.Show()
+}
+
+func RefreshTopicsAndSubs(serverID int, db *db.Database) {
+	topics := db.LoadTopics(serverID)
+	subs := db.LoadSubs(serverID)
+
+	Topics = &topics
+	Subs = &subs
 }

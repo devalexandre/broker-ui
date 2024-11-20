@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -110,7 +111,7 @@ func (d Database) LoadTopics(serverID int) []Topic {
 		topics = append(topics, t)
 	}
 
-	log.Printf("Loaded %v topics for server %v", len(d.Topics), serverID)
+	log.Printf("Loaded %v topics for server %v", len(topics), serverID)
 	return topics
 }
 
@@ -140,17 +141,17 @@ func (d Database) LoadSubs(serverID int) []Sub {
 	}
 	defer rows.Close()
 
-	d.Subs = []Sub{}
+	subs := []Sub{}
 	for rows.Next() {
 		var s Sub
 		err := rows.Scan(&s.ID, &s.SubName)
 		if err != nil {
 			log.Fatal(err)
 		}
-		d.Subs = append(d.Subs, s)
+		subs = append(subs, s)
 	}
 
-	return d.Subs
+	return subs
 }
 
 func (d Database) SaveSub(serverID int, subName string) {
@@ -214,5 +215,41 @@ func (d *Database) SetSetting(key string, value string) error {
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+// DeleteTopic deletes a topic from the database
+func (d *Database) DeleteTopic(serverId int, topicName string) error {
+	stmt, err := d.db.Prepare("DELETE FROM topics WHERE server_id = ? AND topic_name = ?")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(serverId, topicName)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	log.Println("Topic deleted:", topicName)
+	return nil
+}
+
+// DeleteSub deletes a subscription from the database
+func (d *Database) DeleteSub(serverId int, subName string) error {
+	stmt, err := d.db.Prepare("DELETE FROM subs WHERE server_id = ? AND sub_name = ?")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(serverId, subName)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	log.Println("Sub deleted:", subName)
 	return nil
 }

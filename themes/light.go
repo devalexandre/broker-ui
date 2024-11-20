@@ -1,13 +1,14 @@
 package themes
 
 import (
+	"github.com/devalexandre/brokers-ui/themes/themeutils"
 	"image/color"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/theme"
 )
 
-// LightTheme is a custom implementation of a light theme for Fyne
+// LightTheme is a custom implementation of the light theme for Fyne
 type LightTheme struct{}
 
 // Colors for the light theme
@@ -24,6 +25,12 @@ var lightColors = map[fyne.ThemeColorName]color.Color{
 	theme.ColorNamePrimary:         color.RGBA{0, 122, 204, 255},   // Primary color (blue)
 	theme.ColorNameScrollBar:       color.RGBA{220, 220, 220, 255}, // Scroll bars
 	theme.ColorNameShadow:          color.RGBA{0, 0, 0, 50},        // Shadows
+
+	// Custom colors
+	themeutils.ColorNameSuccess: color.RGBA{76, 175, 80, 255},  // Green
+	themeutils.ColorNameInfo:    color.RGBA{33, 150, 243, 255}, // Blue
+	themeutils.ColorNameWarning: color.RGBA{255, 152, 0, 255},  // Orange
+	themeutils.ColorNameDanger:  color.RGBA{244, 67, 54, 255},  // Red
 }
 
 // Implement the Color function for the theme

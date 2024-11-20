@@ -21,7 +21,7 @@ func main() {
 	// Initialize the application
 	myApp := app.New()
 	myWindow := myApp.NewWindow("Broker Client")
-
+	ui.CurrentWindow = myWindow
 	database, err := db.NewDatabase()
 	if err != nil {
 		panic(err)

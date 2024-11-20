@@ -21,7 +21,7 @@ func AddDashboardTab(database *db.Database) {
 	)
 
 	// Add a section for each subscription with a message counter
-	for _, sub := range database.Subs {
+	for _, sub := range *Subs {
 		label := widget.NewLabel(fmt.Sprintf("Sub: %s - Messages received: 0", sub.SubName))
 		metrics[sub.SubName] = label
 		dashboardContainer.Add(label)

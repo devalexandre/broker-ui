@@ -27,9 +27,8 @@ func AddSub(window fyne.Window, db *db.Database, serverID int) {
 			if confirmed {
 				db.SaveSub(serverID, entry.Text)
 				db.LoadSubs(serverID)
-				SubsDropdown.Options = GetSubNames(db)
-				SubsDropdown.Refresh()
-				AddTabsForTopicsAndSubs(db)
+				RefreshTopicsAndSubs(serverID, db)
+				AddTabsForTopicsAndSubs(window, db, serverID)
 			}
 		},
 		window,
@@ -81,9 +80,9 @@ func CreateSubTabContent(subName string) fyne.CanvasObject {
 	)
 }
 
-func GetSubNames(db *db.Database) []string {
+func GetSubNames() []string {
 	var names []string
-	for _, s := range db.Subs {
+	for _, s := range *Subs {
 		names = append(names, s.SubName)
 	}
 	return names

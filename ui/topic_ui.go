@@ -2,11 +2,12 @@ package ui
 
 import (
 	"fmt"
-
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
+	"github.com/devalexandre/brokers-ui/components"
 	"github.com/devalexandre/brokers-ui/db"
 
 	"log"
@@ -27,9 +28,12 @@ func AddTopic(window fyne.Window, db *db.Database, serverID int) {
 			if confirmed {
 				db.SaveTopic(serverID, entry.Text)
 				db.LoadTopics(serverID)
-				TopicsDropdown.Options = GetTopicNames(db)
-				TopicsDropdown.Refresh()
-				AddTabsForTopicsAndSubs(db)
+				RefreshTopicsAndSubs(serverID, db)
+				AddTabsForTopicsAndSubs(window, db, serverID)
+
+				fmt.Println(fmt.Sprintf("Topic %s added", entry.Text))
+				fmt.Println(fmt.Sprintf("Loaded %d topics for server %d", len(*Topics), serverID))
+
 			}
 		},
 		window,
@@ -38,7 +42,7 @@ func AddTopic(window fyne.Window, db *db.Database, serverID int) {
 	dialog.Show()
 }
 
-func CreateTopicTabContent(topicName string) fyne.CanvasObject {
+func CreateTopicTabContent(window fyne.Window, topicName string, db *db.Database, serverID int) fyne.CanvasObject {
 	var messages []string
 
 	messageContainer := container.NewVBox()
@@ -53,10 +57,34 @@ func CreateTopicTabContent(topicName string) fyne.CanvasObject {
 		messageEntry.SetText("")
 	})
 
+	dialogDelete := dialog.NewConfirm("Delete Topic", "Are you sure you want to delete this topic?", func(confirmed bool) {
+		if confirmed {
+			err := db.DeleteTopic(serverID, topicName)
+
+			if err != nil {
+				log.Printf("Error deleting topic: %v", err)
+				return
+			}
+
+			RefreshTopicsAndSubs(SelectedServerID, db)
+			//AddTabsForTopicsAndSubs(window, db, serverID)
+		}
+	}, window)
+
+	deleteButton := components.NewDangerButton("Delete", func() {
+		dialogDelete.Show()
+	})
+
+	hbuttons := container.NewHBox(
+		sendButton,
+		layout.NewSpacer(), // Adiciona espaçamento entre os botões
+		deleteButton,
+	)
+
 	return container.NewVBox(
 		widget.NewLabel(fmt.Sprintf("Topic: %s", topicName)),
 		messageEntry,
-		sendButton,
+		hbuttons,
 		messageContainer,
 	)
 }
@@ -87,9 +115,9 @@ func SendMessageToTopic(topicName, payload string, messageContainer *fyne.Contai
 	messageContainer.Refresh()
 }
 
-func GetTopicNames(db *db.Database) []string {
+func GetTopicNames() []string {
 	var names []string
-	for _, t := range db.Topics {
+	for _, t := range *Topics {
 		names = append(names, t.TopicName)
 	}
 	return names
