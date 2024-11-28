@@ -1,7 +1,7 @@
 module github.com/devalexandre/broker-ui
 
-go 1.23
-
+go 1.22
+toolchain go1.23.1
 require (
 	fyne.io/fyne/v2 v2.5.0
 	github.com/mattn/go-sqlite3 v1.14.22
