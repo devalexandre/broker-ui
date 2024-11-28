@@ -1,19 +1,10 @@
-APP_NAME := nats-client
+APP_NAME := nats.client.com
 VERSION := 0.0.1
 BUILD_DIR := build
 
-# GOOS and GOARCH for different platforms
-PLATFORMS := \
-	linux/amd64 \
-	linux/arm64 \
-	windows/amd64 \
-	darwin/amd64 \
-	darwin/arm64
 
-# Flags for building
-LDFLAGS := -ldflags "-X main.version=$(VERSION)"
 
-.PHONY: all clean build
+.PHONY: all clean build $(PLATFORMS)
 
 all: clean build
 
@@ -22,22 +13,13 @@ clean:
 	rm -rf $(BUILD_DIR)
 
 # Build for all platforms
-build: $(PLATFORMS)
+build: windows linux darwin
 
-$(PLATFORMS):
-	@GOOS=$(word 1,$(subst /, ,$@)) GOARCH=$(word 2,$(subst /, ,$@)) \
-	mkdir -p $(BUILD_DIR)/$@ && \
-	go build $(LDFLAGS) -o $(BUILD_DIR)/$@/$(APP_NAME) .
 
-# Cross-compiling for specific OS/architecture
-linux: GOOS=linux
-linux: GOARCH=amd64
-linux: build
-
-windows: GOOS=windows
-windows: GOARCH=amd64
-windows: build
-
-darwin: GOOS=darwin
-darwin: GOARCH=amd64
-darwin: build
+# Build for all platforms using fyne-cross
+windows:
+	fyne-cross windows -arch=amd64,386  -app-id $(APP_NAME) -app-version $(VERSION)
+linux:
+	fyne-cross linux -arch=amd64,arm64 -app-id $(APP_NAME) -app-version $(VERSION)
+darwin:
+	fyne-cross darwin -arch=amd64,arm64 -app-id $(APP_NAME) -app-version $(VERSION)

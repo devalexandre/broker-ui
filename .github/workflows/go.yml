@@ -10,11 +10,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        os: [linux, windows, darwin]
-        arch: [amd64, arm64]
-
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
@@ -23,22 +18,28 @@ jobs:
       run: |
         go install github.com/fyne-io/fyne-cross@latest
 
-    - name: Build Binary with fyne-cross
+    - name: Build All Binaries
       run: |
-        fyne-cross ${{ matrix.os }} -arch=${{ matrix.arch }} -output build/${{ matrix.os }}-${{ matrix.arch }}
+        make all
 
-    - name: Compress Binary
+    - name: Compress and Rename Files
       run: |
         mkdir -p build/compressed
-        cd build
-        if [ "${{ matrix.os }}" == "windows" ]; then
-          zip compressed/${{ matrix.os }}-${{ matrix.arch }}.zip ${{ matrix.os }}-${{ matrix.arch }}/*.exe
-        else
-          tar -czf compressed/${{ matrix.os }}-${{ matrix.arch }}.tar.gz ${{ matrix.os }}-${{ matrix.arch }}/*
-        fi
+        for platform in windows linux darwin; do
+          for arch in amd64 arm64; do
+            case $platform in
+              windows)
+                find fyne-cross/dist -name "*${platform}-${arch}*.exe.zip" -exec cp {} build/compressed/${platform}-${arch}.zip \;
+                ;;
+              linux|darwin)
+                find fyne-cross/dist -name "*${platform}-${arch}*.tar.xz" -exec cp {} build/compressed/${platform}-${arch}.tar.xz \;
+                ;;
+            esac
+          done
+        done
 
-    - name: Upload Compressed Artifact
+    - name: Upload Compressed Artifacts
       uses: actions/upload-artifact@v3
       with:
-        name: ${{ matrix.os }}-${{ matrix.arch }}-binary
-        path: build/compressed/${{ matrix.os }}-${{ matrix.arch }}.*
+        name: "compressed-binaries"
+        path: build/compressed/*
