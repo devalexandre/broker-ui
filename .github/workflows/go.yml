@@ -1,4 +1,4 @@
-name: Build Binaries for Linux, Windows, and macOS
+name: Build and Compress Binaries
 
 on:
   push:
@@ -13,7 +13,7 @@ jobs:
     strategy:
       matrix:
         os: [linux, windows, darwin]
-        arch: [amd64, arm64] # Adicionado suporte para arm64
+        arch: [amd64, arm64]
 
     steps:
     - name: Checkout Code
@@ -29,8 +29,18 @@ jobs:
         make clean
         GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} make build
 
-    - name: Upload Binary Artifact
+    - name: Compress Binary
+      run: |
+        mkdir -p build/compressed
+        cd build/${{ matrix.os }}/${{ matrix.arch }}
+        if [ "${{ matrix.os }}" == "windows" ]; then
+          zip ../../compressed/${{ matrix.os }}-${{ matrix.arch }}.zip nats-client.exe
+        else
+          tar -czf ../../compressed/${{ matrix.os }}-${{ matrix.arch }}.tar.gz nats-client
+        fi
+
+    - name: Upload Compressed Artifact
       uses: actions/upload-artifact@v3
       with:
         name: ${{ matrix.os }}-${{ matrix.arch }}-binary
-        path: build/${{ matrix.os }}/${{ matrix.arch }}/nats-client
+        path: build/compressed/${{ matrix.os }}-${{ matrix.arch }}.*
