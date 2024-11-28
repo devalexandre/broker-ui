@@ -1,4 +1,4 @@
-name: Build and Compress Binaries
+name: Build and Compress Binaries with fyne-cross
 
 on:
   push:
@@ -19,24 +19,22 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.22'
-
-    - name: Build Binary
+    - name: Install fyne-cross
       run: |
-        make clean
-        GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} make build
+        go install github.com/fyne-io/fyne-cross@latest
+
+    - name: Build Binary with fyne-cross
+      run: |
+        fyne-cross ${{ matrix.os }} -arch=${{ matrix.arch }} -output build/${{ matrix.os }}-${{ matrix.arch }}
 
     - name: Compress Binary
       run: |
         mkdir -p build/compressed
-        cd build/${{ matrix.os }}/${{ matrix.arch }}
+        cd build
         if [ "${{ matrix.os }}" == "windows" ]; then
-          zip ../../compressed/${{ matrix.os }}-${{ matrix.arch }}.zip nats-client.exe
+          zip compressed/${{ matrix.os }}-${{ matrix.arch }}.zip ${{ matrix.os }}-${{ matrix.arch }}/*.exe
         else
-          tar -czf ../../compressed/${{ matrix.os }}-${{ matrix.arch }}.tar.gz nats-client
+          tar -czf compressed/${{ matrix.os }}-${{ matrix.arch }}.tar.gz ${{ matrix.os }}-${{ matrix.arch }}/*
         fi
 
     - name: Upload Compressed Artifact
