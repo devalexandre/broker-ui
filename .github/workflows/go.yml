@@ -35,10 +35,10 @@ jobs:
           for arch in amd64 arm64; do
             case $platform in
               windows)
-                find fyne-cross/dist -name "*${platform}-${arch}*.exe.zip" -exec cp {} build/compressed/${platform}-${arch}.zip \;
+                find fyne-cross/dist -name "*${platform}-${arch}*" -exec cp {} build/compressed/${platform}-${arch}.zip \;
                 ;;
               linux)
-                find fyne-cross/dist -name "*${platform}-${arch}*.tar.xz" -exec cp {} build/compressed/${platform}-${arch}.tar.xz \;
+                find fyne-cross/dist -name "*${platform}-${arch}*" -exec cp {} build/compressed/${platform}-${arch}.tar.xz \;
                 ;;
             esac
           done

@@ -1,5 +1,5 @@
 APP_NAME := nats.client.com
-VERSION := 0.0.1
+VERSION := 0.0.2
 BUILD_DIR := build
 
 
