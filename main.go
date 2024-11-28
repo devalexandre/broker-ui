@@ -13,8 +13,8 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
-	"github.com/devalexandre/nats-ui/natscli"
-	"github.com/devalexandre/nats-ui/themes/dracula"
+	"github.com/devalexandre/broker-ui/natscli"
+	"github.com/devalexandre/broker-ui/themes/dracula"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/nats-io/nats.go"
 )

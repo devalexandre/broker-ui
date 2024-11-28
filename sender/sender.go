@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 
-	"github.com/devalexandre/nats-ui/natscli"
+	"github.com/devalexandre/broker-ui/natscli"
 )
 
 func main() {

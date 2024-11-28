@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/devalexandre/nats-ui/natscli"
+	"github.com/devalexandre/broker-ui/natscli"
 	"github.com/nats-io/nats.go"
 )
 
