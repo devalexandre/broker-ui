@@ -7,7 +7,7 @@ on:
     branches: [ "master" ]
 
 jobs:
-  build:
+  build-linux-windows:
     runs-on: ubuntu-latest
 
     steps:
@@ -24,20 +24,20 @@ jobs:
         which fyne-cross
         fyne-cross version
 
-    - name: Build All Binaries
+    - name: Build For Linux and Windows
       run: |
-        make all
+        make linux windows
 
     - name: Compress and Rename Files
       run: |
         mkdir -p build/compressed
-        for platform in windows linux darwin; do
+        for platform in windows linux; do
           for arch in amd64 arm64; do
             case $platform in
               windows)
                 find fyne-cross/dist -name "*${platform}-${arch}*.exe.zip" -exec cp {} build/compressed/${platform}-${arch}.zip \;
                 ;;
-              linux|darwin)
+              linux)
                 find fyne-cross/dist -name "*${platform}-${arch}*.tar.xz" -exec cp {} build/compressed/${platform}-${arch}.tar.xz \;
                 ;;
             esac
@@ -47,5 +47,36 @@ jobs:
     - name: Upload Compressed Artifacts
       uses: actions/upload-artifact@v3
       with:
-        name: "compressed-binaries"
+        name: "linux-windows-binaries"
         path: build/compressed/*
+
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.22'
+
+    - name: Install fyne-cross
+      run: |
+        go install github.com/fyne-io/fyne-cross@latest
+
+    - name: Build macOS Binary
+      run: |
+        make darwin
+
+    - name: Compress macOS Binary
+      run: |
+        mkdir -p build/compressed
+        tar -czf build/compressed/macos.tar.gz -C build/macos .
+
+    - name: Upload macOS Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: macos-binary
+        path: build/compressed/macos.tar.gz
