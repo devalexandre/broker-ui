@@ -17,6 +17,12 @@ jobs:
     - name: Install fyne-cross
       run: |
         go install github.com/fyne-io/fyne-cross@latest
+        echo "$HOME/go/bin" >> $GITHUB_PATH
+
+    - name: Verify fyne-cross Installation
+      run: |
+        which fyne-cross
+        fyne-cross version
 
     - name: Build All Binaries
       run: |
