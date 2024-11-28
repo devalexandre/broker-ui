@@ -1,5 +1,5 @@
 APP_NAME := nats-client
-VERSION := 1.0.0
+VERSION := 0.0.1
 BUILD_DIR := build
 
 # GOOS and GOARCH for different platforms

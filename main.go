@@ -25,6 +25,7 @@ var topicsDropdown *widget.Select
 var subsDropdown *widget.Select
 var tabContainer *container.AppTabs
 var selectedServerID int
+var selectedServer server
 var NatsError error
 var wg sync.WaitGroup
 
@@ -56,6 +57,8 @@ var sentMessages = make(map[string][]string)
 var receivedMessages = make(map[string][]string)
 var dasboardReceivedMessages = make(map[string]int)
 
+var myWindow fyne.Window
+
 func main() {
 	// Inicializar o banco de dados SQLite3
 	var err error
@@ -84,7 +87,7 @@ func main() {
 
 	myApp := app.New()
 	myApp.Settings().SetTheme(dracula.DraculaTheme{})
-	myWindow := myApp.NewWindow("NATS Client")
+	myWindow = myApp.NewWindow("NATS Client")
 
 	// Menu Superior
 	menu := container.NewBorder(
@@ -128,7 +131,7 @@ Developed by [Alexandre E Souza](https://www.linkedin.com/in/devevantelista)
 	)
 
 	serverList.OnSelected = func(id widget.ListItemID) {
-		selectedServer := servers[id]
+		selectedServer = servers[id]
 		selectedServerID = selectedServer.ID
 		displayServerOptions(myWindow, selectedServer.Name, selectedServer.URL)
 	}
@@ -183,16 +186,6 @@ func displayServerOptions(window fyne.Window, name string, url string) {
 		// Carregar tópicos e subs se a conexão for bem-sucedida
 		loadTopics(selectedServerID)
 		loadSubs(selectedServerID)
-
-		topicsDropdown = widget.NewSelect(getTopicNames(), func(topic string) {
-			log.Printf("Selected topic: %s", topic)
-		})
-		subsDropdown = widget.NewSelect(getSubNames(), func(sub string) {
-			log.Printf("Selected sub: %s", sub)
-		})
-
-		panel.Add(topicsDropdown)
-		panel.Add(subsDropdown)
 	}
 
 	configTab := container.NewTabItem("Config", panel)
@@ -201,7 +194,7 @@ func displayServerOptions(window fyne.Window, name string, url string) {
 	tabContainer.Refresh()
 
 	addDashboardTab()
-	addTabsForTopicsAndSubs()
+	addTabsForTopicsAndSubs(selectedServerID)
 }
 
 func disconnectFromServer() {
@@ -263,16 +256,16 @@ func updateServer(serverID int, name string, url string) {
 	log.Println("Server updated:", name, url)
 }
 
-func addTabsForTopicsAndSubs() {
+func addTabsForTopicsAndSubs(serverID int) {
 	for _, t := range topics {
 		topicName := fmt.Sprintf("topic-%v", t.TopicName)
-		tab := container.NewTabItem(topicName, createTopicTabContent(t.TopicName))
+		tab := container.NewTabItemWithIcon(topicName, theme.MailSendIcon(), createTopicTabContent(t.TopicName, serverID))
 		tabContainer.Append(tab)
 	}
 
 	for _, s := range subs {
 		subname := fmt.Sprintf("sub-%v", s.SubName)
-		tab := container.NewTabItem(subname, createSubTabContent(s.SubName))
+		tab := container.NewTabItemWithIcon(subname, theme.ViewRefreshIcon(), createSubTabContent(s.SubName))
 		tabContainer.Append(tab)
 	}
 
@@ -323,7 +316,7 @@ func createSubTabContent(subName string) fyne.CanvasObject {
 	)
 }
 
-func createTopicTabContent(topicName string) fyne.CanvasObject {
+func createTopicTabContent(topicName string, serverId int) fyne.CanvasObject {
 	// Slice para armazenar as mensagens
 	var messages []string
 
@@ -343,8 +336,24 @@ func createTopicTabContent(topicName string) fyne.CanvasObject {
 		messageEntry.SetText("")
 	})
 
+	// Cria o botão "X" para fechar a aba
+	closeButton := widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
+		dialog.NewConfirm("Delete Topic", "Are you sure you want to delete this topic?", func(confirmed bool) {
+			if confirmed {
+				deleteTopic(topicName, serverId)
+				tab := findTabByTopicName(topicName)
+				tabContainer.Remove(tab)
+				tabContainer.Refresh()
+			}
+		}, myWindow).Show()
+
+	})
+
 	return container.NewVBox(
-		widget.NewLabel(fmt.Sprintf("Topic: %s", topicName)),
+		container.NewHBox(
+			widget.NewLabel(fmt.Sprintf("Topic: %s", topicName)),
+			closeButton,
+		),
 		messageEntry,
 		sendButton,
 		messageContainer,
@@ -399,8 +408,7 @@ func addServer(parent fyne.Window) {
 		func(confirmed bool) {
 			if confirmed {
 				saveServer(nameEntry.Text, urlEntry.Text)
-				loadServers()        // Recarrega a lista de servidores
-				serverList.Refresh() // Atualiza a lista exibida
+				displayServerOptions(myWindow, selectedServer.Name, selectedServer.URL)
 			}
 		},
 		parent,
@@ -462,10 +470,7 @@ func addTopic(window fyne.Window, serverID int) {
 		func(confirmed bool) {
 			if confirmed {
 				saveTopic(serverID, entry.Text)
-				loadTopics(serverID)
-				topicsDropdown.Options = getTopicNames()
-				topicsDropdown.Refresh()
-				addTabsForTopicsAndSubs()
+				displayServerOptions(myWindow, selectedServer.Name, selectedServer.URL)
 			}
 		},
 		window,
@@ -478,9 +483,10 @@ func saveTopic(serverID int, topicName string) {
 	if topicName == "" {
 		return
 	}
-
-	stmt, err := db.Prepare("INSERT INTO topics(server_id, topic_name) VALUES(?, ?)")
+	q := "INSERT INTO topics(server_id, topic_name) VALUES(?, ?)"
+	stmt, err := db.Prepare(q)
 	if err != nil {
+		log.Printf("saveTopic query %v", q)
 		log.Fatal(err)
 	}
 	defer stmt.Close()
@@ -525,10 +531,7 @@ func addSub(window fyne.Window, serverID int) {
 		func(confirmed bool) {
 			if confirmed {
 				saveSub(serverID, entry.Text)
-				loadSubs(serverID)
-				subsDropdown.Options = getSubNames()
-				subsDropdown.Refresh()
-				addTabsForTopicsAndSubs()
+				displayServerOptions(myWindow, selectedServer.Name, selectedServer.URL)
 			}
 		},
 		window,
@@ -572,6 +575,21 @@ func loadSubs(serverID int) {
 		}
 		subs = append(subs, s)
 	}
+}
+
+func deleteTopic(topicname string, serverId int) {
+	stmt, err := db.Prepare("DELETE FROM topics WHERE topic_name = ? AND server_id = ?")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(topicname, serverId)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Println("Topic deleted:", topicname)
 }
 
 func getTopicNames() []string {

@@ -1,7 +1,4 @@
-# This workflow will build a golang project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
-
-name: Go
+name: Build Binaries for Linux, Windows, and macOS
 
 on:
   push:
@@ -10,16 +7,30 @@ on:
     branches: [ "master" ]
 
 jobs:
-
   build:
     runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        os: [linux, windows, darwin]
+        arch: [amd64, arm64] # Adicionado suporte para arm64
+
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout Code
+      uses: actions/checkout@v4
 
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
         go-version: '1.22'
 
-    - name: Build
-      run: make build
+    - name: Build Binary
+      run: |
+        make clean
+        GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} make build
+
+    - name: Upload Binary Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ matrix.os }}-${{ matrix.arch }}-binary
+        path: build/${{ matrix.os }}/${{ matrix.arch }}/nats-client
