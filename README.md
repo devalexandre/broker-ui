@@ -4,6 +4,8 @@
 
 A modern and intuitive desktop application for managing NATS connections, built with Go and Fyne. This tool allows you to connect to NATS servers, create publishers/subscribers, and monitor messages in real-time.
 
+[Download](https://geoffrey-artefacts.fynelabs.com/github/devalexandre/devalexandre/broker-ui/825/index.html)
+
 ## 🚀 Features
 
 ### 📡 NATS Server Management
