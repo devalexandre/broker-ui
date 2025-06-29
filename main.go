@@ -14,8 +14,10 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"github.com/devalexandre/broker-ui/icons"
 	"github.com/devalexandre/broker-ui/natscli"
 	"github.com/devalexandre/broker-ui/themes/dracula"
+	"github.com/devalexandre/broker-ui/themes/light"
 	"github.com/fynelabs/fyneselfupdate"
 	"github.com/fynelabs/selfupdate"
 	_ "github.com/mattn/go-sqlite3"
@@ -56,16 +58,19 @@ var topics []topic
 var subs []sub
 var natsServers = make(map[int]*natscli.Nats)
 
-// Um mapa para armazenar as mensagens enviadas para cada tópico e sub
+// A map to store sent messages for each topic and sub
 var sentMessages = make(map[string][]string)
 var receivedMessages = make(map[string][]string)
 var dasboardReceivedMessages = make(map[string]int)
 
 var myWindow fyne.Window
+var myApp fyne.App
+var isDarkTheme bool = true // Controls whether using dark theme (Dracula) or light theme (Light)
+var themeButton *widget.Button
 
 func main() {
 
-	// Inicializar o banco de dados SQLite3
+	// Initialize SQLite3 database
 	var err error
 	db, err = sql.Open("sqlite3", "./nats_servers.db")
 	if err != nil {
@@ -73,7 +78,7 @@ func main() {
 	}
 	defer db.Close()
 
-	// Criar tabelas
+	// Create tables
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS servers (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, url TEXT)`)
 	if err != nil {
 		log.Fatal(err)
@@ -87,27 +92,35 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Migração: adicionar coluna subject_pattern se não existir
+	// Migration: add subject_pattern column if it doesn't exist
 	_, err = db.Exec(`ALTER TABLE subs ADD COLUMN subject_pattern TEXT DEFAULT ''`)
 	if err != nil {
-		// Ignorar erro se a coluna já existir
+		// Ignore error if column already exists
 		log.Printf("Column subject_pattern may already exist: %v", err)
 	}
 
-	// Carregar servidores do banco de dados
+	// Load servers from database
 	loadServers()
 
-	myApp := app.New()
+	myApp = app.New()
 	myApp.Settings().SetTheme(dracula.DraculaTheme{})
 	myWindow = myApp.NewWindow("NATS Client")
 
-	// Menu Superior
+	// Create theme button
+	themeButton = widget.NewButtonWithIcon("Theme", icons.ThemeToggleIcon(isDarkTheme), func() {
+		toggleTheme()
+	})
+
+	// Top Menu
 	menu := container.NewBorder(
 		nil, nil,
-		widget.NewButtonWithIcon("Add Server", theme.ContentAddIcon(), func() {
-			addServer(myWindow)
-		}),
-		widget.NewButtonWithIcon("Exit", theme.CancelIcon(), func() {
+		container.NewHBox(
+			widget.NewButtonWithIcon("Add Server", icons.AddServerIcon(), func() {
+				addServer(myWindow)
+			}),
+			themeButton,
+		),
+		widget.NewButtonWithIcon("Exit", icons.ExitIcon(), func() {
 			myApp.Quit()
 		}),
 	)
@@ -127,11 +140,11 @@ Developed by [Alexandre E Souza](https://www.linkedin.com/in/devevantelista)
 	// Create a RichText widget to render the markdown
 	welcomeMessage := widget.NewRichTextFromMarkdown(markdownContent)
 
-	// Painel Principal
+	// Main Panel
 	tabContainer = container.NewAppTabs()
 	welcomeTab := container.NewTabItem("Welcome", welcomeMessage)
 	tabContainer.Append(welcomeTab)
-	// Lista de Servidores
+	// Server List
 	serverList = widget.NewList(
 		func() int { return len(servers) },
 		func() fyne.CanvasObject {
@@ -148,12 +161,12 @@ Developed by [Alexandre E Souza](https://www.linkedin.com/in/devevantelista)
 		displayServerOptions(myWindow, selectedServer.Name, selectedServer.URL)
 	}
 
-	// Layout Principal
+	// Main Layout
 	mainContent := container.NewHSplit(
 		container.NewVBox(serverList),
 		tabContainer,
 	)
-	mainContent.Offset = 0.2 // Define o espaço do menu esquerdo
+	mainContent.Offset = 0.2 // Define left menu space
 
 	content := container.NewBorder(menu, nil, nil, nil, mainContent)
 
@@ -167,15 +180,15 @@ Developed by [Alexandre E Souza](https://www.linkedin.com/in/devevantelista)
 }
 
 func displayServerOptions(window fyne.Window, name string, url string) {
-	// Limpar as abas antes de recriar
+	// Clear tabs before recreating
 	clearTabs()
 
-	// Menu adicional para o servidor selecionado
+	// Additional menu for selected server
 	menu := container.NewHBox(
-		widget.NewButtonWithIcon("Add Publisher", theme.ContentAddIcon(), func() {
+		widget.NewButtonWithIcon("Add Publisher", icons.PublisherIcon(), func() {
 			addTopic(window, selectedServerID)
 		}),
-		widget.NewButtonWithIcon("Add Subscriber", theme.ContentAddIcon(), func() {
+		widget.NewButtonWithIcon("Add Subscriber", icons.SubscriberIcon(), func() {
 			addSub(window, selectedServerID)
 		}),
 		widget.NewButtonWithIcon("Disconnect", theme.MediaStopIcon(), func() {
@@ -183,7 +196,7 @@ func displayServerOptions(window fyne.Window, name string, url string) {
 		}),
 	)
 
-	// Botão de Editar Conexão
+	// Edit Connection Button
 	editButton := widget.NewButtonWithIcon("Edit Connection", theme.ViewRefreshIcon(), func() {
 		editServerConnection(window, selectedServerID, name, url)
 	})
@@ -194,12 +207,12 @@ func displayServerOptions(window fyne.Window, name string, url string) {
 		editButton,
 	)
 
-	// Tentativa de criar um novo cliente NATS
+	// Attempt to create a new NATS client
 	natsServers[selectedServerID], NatsError = natscli.NewNats(url)
 	if NatsError != nil {
 		dialog.ShowError(NatsError, window)
 	} else {
-		// Carregar tópicos e subs se a conexão for bem-sucedida
+		// Load topics and subs if connection is successful
 		loadTopics(selectedServerID)
 		loadSubs(selectedServerID)
 	}
@@ -214,7 +227,7 @@ func displayServerOptions(window fyne.Window, name string, url string) {
 }
 
 func disconnectFromServer() {
-	// Fecha a conexão NATS e limpa as tabs
+	// Close NATS connection and clear tabs
 	if client, ok := natsServers[selectedServerID]; ok {
 		client.Close()
 		delete(natsServers, selectedServerID)
@@ -246,8 +259,8 @@ func editServerConnection(window fyne.Window, serverID int, currentName, current
 		func(confirmed bool) {
 			if confirmed {
 				updateServer(serverID, nameEntry.Text, urlEntry.Text)
-				loadServers()        // Recarrega a lista de servidores
-				serverList.Refresh() // Atualiza a lista exibida
+				loadServers()        // Reload server list
+				serverList.Refresh() // Update displayed list
 				displayServerOptions(window, nameEntry.Text, urlEntry.Text)
 			}
 		},
@@ -289,7 +302,7 @@ func addTabsForTopicsAndSubs(serverID int) {
 }
 
 func createSubTabContent(subName string, serverId int) fyne.CanvasObject {
-	// Encontrar a subscription correspondente para obter o subject pattern
+	// Find corresponding subscription to get subject pattern
 	var subjectPattern string
 	for _, s := range subs {
 		if s.SubName == subName && s.ServerID == serverId {
@@ -298,27 +311,27 @@ func createSubTabContent(subName string, serverId int) fyne.CanvasObject {
 		}
 	}
 
-	// Se não encontrou o pattern, usar o nome da sub como fallback
+	// If pattern not found, use sub name as fallback
 	if subjectPattern == "" {
 		subjectPattern = subName
 	}
 
-	// Canal para receber mensagens
+	// Channel to receive messages
 	messageChan := make(chan string)
 
-	// Caixa vertical para armazenar as mensagens
+	// Vertical box to store messages
 	messageContainer := container.NewVBox()
 
-	receivedMessages[subName] = []string{} // Inicializar lista de mensagens recebidas para o sub
+	receivedMessages[subName] = []string{} // Initialize received messages list for sub
 
-	// Goroutine para lidar com a assinatura NATS e enviar mensagens para o canal
+	// Goroutine to handle NATS subscription and send messages to channel
 	go func() {
 		err := natsServers[selectedServerID].Subscribe(subjectPattern, func(m *nats.Msg) {
 			payload := string(m.Data)
 			subject := m.Subject
 			log.Printf("Received message from sub %s (subject: %s): %s", subName, subject, payload)
 
-			// Enviar a mensagem para o canal com informação do subject
+			// Send message to channel with subject information
 			messageChan <- fmt.Sprintf("[%s] %s", subject, payload)
 		})
 
@@ -328,20 +341,20 @@ func createSubTabContent(subName string, serverId int) fyne.CanvasObject {
 		}
 	}()
 
-	// Goroutine para monitorar o canal e atualizar a interface gráfica
+	// Goroutine to monitor channel and update GUI
 	go func() {
 		for payload := range messageChan {
 			receivedMessages[subName] = append(receivedMessages[subName], payload)
 
-			// Adicionar a mensagem ao container na thread principal
+			// Add message to container in main thread
 			messageContainer.Add(widget.NewLabel(payload))
 
-			// Atualizar a interface gráfica
+			// Update GUI
 			messageContainer.Refresh()
 		}
 	}()
 
-	// Cria o botão "X" para fechar a aba
+	// Create "X" button to close tab
 	closeButton := widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
 		dialog.NewConfirm("Delete Subscription", "Are you sure you want to delete this subscription?", func(confirmed bool) {
 			if confirmed {
@@ -363,35 +376,35 @@ func createSubTabContent(subName string, serverId int) fyne.CanvasObject {
 }
 
 func createTopicTabContent(topicName string, serverId int) fyne.CanvasObject {
-	// Slice para armazenar as mensagens
+	// Slice to store messages
 	var messages []string
 
-	// Container vertical para exibir as mensagens
+	// Vertical container to display messages
 	messageContainer := container.NewVBox()
 
-	// Entrada de texto para o subject
+	// Text entry for subject
 	subjectEntry := widget.NewEntry()
-	subjectEntry.SetText(topicName) // Pré-preencher com o nome do tópico
+	subjectEntry.SetText(topicName) // Pre-fill with topic name
 	subjectEntry.SetPlaceHolder("Enter subject to publish to...")
 
-	// Entrada de texto para a mensagem
+	// Text entry for message
 	messageEntry := widget.NewMultiLineEntry()
 	messageEntry.SetPlaceHolder("Enter message payload here...")
 
-	// Botão de envio
+	// Send button
 	sendButton := widget.NewButton("Send", func() {
 		subject := subjectEntry.Text
 		payload := messageEntry.Text
 		if subject == "" {
-			subject = topicName // Fallback para o nome do tópico
+			subject = topicName // Fallback to topic name
 		}
 		sendMessageToTopic(subject, payload, messageContainer, &messages)
 
-		// Limpar a entrada de mensagem
+		// Clear message entry
 		messageEntry.SetText("")
 	})
 
-	// Cria o botão "X" para fechar a aba
+	// Create "X" button to close tab
 	closeButton := widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
 		dialog.NewConfirm("Delete Publisher", "Are you sure you want to delete this publisher?", func(confirmed bool) {
 			if confirmed {
@@ -425,7 +438,7 @@ func sendMessageToTopic(topicName string, payload string, messageContainer *fyne
 		return
 	}
 
-	// Enviar a mensagem ao NATS server
+	// Send message to NATS server
 	err := natsServers[selectedServerID].Publish(topicName, []byte(payload))
 	if err != nil {
 		fmt.Println("Error publishing message:", err)
@@ -434,10 +447,10 @@ func sendMessageToTopic(topicName string, payload string, messageContainer *fyne
 
 	log.Printf("Sending message to topic %s: %s", topicName, payload)
 
-	// Armazena a mensagem na lista para exibição
+	// Store message in list for display
 	*messages = append(*messages, payload)
 
-	// Atualizar a interface gráfica
+	// Update GUI
 	messageContainer.Add(widget.NewLabel(payload))
 	messageContainer.Refresh()
 }
@@ -491,7 +504,7 @@ func saveServer(name string, url string) {
 		return
 	}
 
-	// Inserir Nome e URL no banco de dados SQLite3
+	// Insert Name and URL into SQLite3 database
 	stmt, err := db.Prepare("INSERT INTO servers(name, url) VALUES(?, ?)")
 	if err != nil {
 		log.Fatal(err)
@@ -507,7 +520,7 @@ func saveServer(name string, url string) {
 }
 
 func loadServers() {
-	// Carrega os servidores do banco de dados
+	// Load servers from database
 	rows, err := db.Query("SELECT id, name, url FROM servers")
 	if err != nil {
 		log.Fatal(err)
@@ -697,39 +710,57 @@ func getSubNames() []string {
 	return names
 }
 
-// Adicionar a aba de Dashboard
+// Add Dashboard tab
 func addDashboardTab() {
-	// Variáveis para armazenar contagens de mensagens por sub
+	// Variables to store message counts per sub
 	metrics := make(map[string]*widget.Label)
 
-	// Cria um container para os gráficos ou tabelas de cada sub
+	// Create container for charts or tables for each sub
 	dashboardContainer := container.NewVBox(
 		widget.NewLabel("Message Monitoring Dashboard"),
 	)
 
-	// Adiciona uma seção para cada sub com um contador de mensagens
+	// Add section for each sub with message counter
 	for _, sub := range subs {
 		label := widget.NewLabel(fmt.Sprintf("Sub: %s - Messages received: 0", sub.SubName))
 		metrics[sub.SubName] = label
 		dashboardContainer.Add(label)
 	}
 
-	// Adiciona a aba do Dashboard ao tabContainer
+	// Add Dashboard tab to tabContainer
 	dashboardTab := container.NewTabItem("Dashboard", dashboardContainer)
 	tabContainer.Append(dashboardTab)
 	tabContainer.Select(dashboardTab)
 
-	// Goroutine para monitorar as mensagens e atualizar as métricas
+	// Goroutine to monitor messages and update metrics
 	go func() {
 		for {
 			for subName, label := range metrics {
-				// Conta o número de mensagens recebidas para esta sub
+				// Count number of messages received for this sub
 				count := len(receivedMessages[subName])
 				label.SetText(fmt.Sprintf("Sub: %s - Messages received: %d", subName, count))
 			}
 			time.Sleep(1 * time.Second)
 		}
 	}()
+}
+
+// toggleTheme switches between dark theme (Dracula) and light theme (Light)
+func toggleTheme() {
+	if isDarkTheme {
+		// Switch to light theme
+		myApp.Settings().SetTheme(light.LightTheme{})
+		isDarkTheme = false
+		log.Println("Switched to Light theme")
+	} else {
+		// Switch to dark theme
+		myApp.Settings().SetTheme(dracula.DraculaTheme{})
+		isDarkTheme = true
+		log.Println("Switched to Dracula theme")
+	}
+
+	// Update theme button icon
+	themeButton.SetIcon(icons.ThemeToggleIcon(isDarkTheme))
 }
 
 func selfManage(a fyne.App, w fyne.Window) {
