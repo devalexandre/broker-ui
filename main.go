@@ -45,9 +45,10 @@ type topic struct {
 }
 
 type sub struct {
-	ID       int
-	ServerID int
-	SubName  string
+	ID             int
+	ServerID       int
+	SubName        string
+	SubjectPattern string
 }
 
 var servers []server
@@ -81,9 +82,16 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS subs (id INTEGER PRIMARY KEY AUTOINCREMENT, server_id INTEGER, sub_name TEXT)`)
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS subs (id INTEGER PRIMARY KEY AUTOINCREMENT, server_id INTEGER, sub_name TEXT, subject_pattern TEXT)`)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	// Migração: adicionar coluna subject_pattern se não existir
+	_, err = db.Exec(`ALTER TABLE subs ADD COLUMN subject_pattern TEXT DEFAULT ''`)
+	if err != nil {
+		// Ignorar erro se a coluna já existir
+		log.Printf("Column subject_pattern may already exist: %v", err)
 	}
 
 	// Carregar servidores do banco de dados
@@ -164,10 +172,10 @@ func displayServerOptions(window fyne.Window, name string, url string) {
 
 	// Menu adicional para o servidor selecionado
 	menu := container.NewHBox(
-		widget.NewButtonWithIcon("Add Topic", theme.ContentAddIcon(), func() {
+		widget.NewButtonWithIcon("Add Publisher", theme.ContentAddIcon(), func() {
 			addTopic(window, selectedServerID)
 		}),
-		widget.NewButtonWithIcon("Add Sub", theme.ContentAddIcon(), func() {
+		widget.NewButtonWithIcon("Add Subscriber", theme.ContentAddIcon(), func() {
 			addSub(window, selectedServerID)
 		}),
 		widget.NewButtonWithIcon("Disconnect", theme.MediaStopIcon(), func() {
@@ -273,14 +281,28 @@ func addTabsForTopicsAndSubs(serverID int) {
 
 	for _, s := range subs {
 		subname := fmt.Sprintf("sub-%v", s.SubName)
-		tab := container.NewTabItemWithIcon(subname, theme.ViewRefreshIcon(), createSubTabContent(s.SubName))
+		tab := container.NewTabItemWithIcon(subname, theme.ViewRefreshIcon(), createSubTabContent(s.SubName, serverID))
 		tabContainer.Append(tab)
 	}
 
 	tabContainer.Refresh()
 }
 
-func createSubTabContent(subName string) fyne.CanvasObject {
+func createSubTabContent(subName string, serverId int) fyne.CanvasObject {
+	// Encontrar a subscription correspondente para obter o subject pattern
+	var subjectPattern string
+	for _, s := range subs {
+		if s.SubName == subName && s.ServerID == serverId {
+			subjectPattern = s.SubjectPattern
+			break
+		}
+	}
+
+	// Se não encontrou o pattern, usar o nome da sub como fallback
+	if subjectPattern == "" {
+		subjectPattern = subName
+	}
+
 	// Canal para receber mensagens
 	messageChan := make(chan string)
 
@@ -291,16 +313,17 @@ func createSubTabContent(subName string) fyne.CanvasObject {
 
 	// Goroutine para lidar com a assinatura NATS e enviar mensagens para o canal
 	go func() {
-		err := natsServers[selectedServerID].Subscribe(subName, func(m *nats.Msg) {
+		err := natsServers[selectedServerID].Subscribe(subjectPattern, func(m *nats.Msg) {
 			payload := string(m.Data)
-			log.Printf("Received message from sub %s: %s", subName, payload)
+			subject := m.Subject
+			log.Printf("Received message from sub %s (subject: %s): %s", subName, subject, payload)
 
-			// Enviar a mensagem para o canal
-			messageChan <- payload
+			// Enviar a mensagem para o canal com informação do subject
+			messageChan <- fmt.Sprintf("[%s] %s", subject, payload)
 		})
 
 		if err != nil {
-			log.Printf("Error subscribing to subject %s: %v", subName, err)
+			log.Printf("Error subscribing to subject pattern %s: %v", subjectPattern, err)
 			return
 		}
 	}()
@@ -318,8 +341,23 @@ func createSubTabContent(subName string) fyne.CanvasObject {
 		}
 	}()
 
+	// Cria o botão "X" para fechar a aba
+	closeButton := widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
+		dialog.NewConfirm("Delete Subscription", "Are you sure you want to delete this subscription?", func(confirmed bool) {
+			if confirmed {
+				deleteSub(subName, serverId)
+				tab := findTabBySubName(subName)
+				tabContainer.Remove(tab)
+				tabContainer.Refresh()
+			}
+		}, myWindow).Show()
+	})
+
 	return container.NewVBox(
-		widget.NewLabel(fmt.Sprintf("Sub: %s", subName)),
+		container.NewHBox(
+			widget.NewLabel(fmt.Sprintf("Sub: %s (Pattern: %s)", subName, subjectPattern)),
+			closeButton,
+		),
 		messageContainer,
 	)
 }
@@ -331,14 +369,23 @@ func createTopicTabContent(topicName string, serverId int) fyne.CanvasObject {
 	// Container vertical para exibir as mensagens
 	messageContainer := container.NewVBox()
 
+	// Entrada de texto para o subject
+	subjectEntry := widget.NewEntry()
+	subjectEntry.SetText(topicName) // Pré-preencher com o nome do tópico
+	subjectEntry.SetPlaceHolder("Enter subject to publish to...")
+
 	// Entrada de texto para a mensagem
 	messageEntry := widget.NewMultiLineEntry()
 	messageEntry.SetPlaceHolder("Enter message payload here...")
 
 	// Botão de envio
 	sendButton := widget.NewButton("Send", func() {
+		subject := subjectEntry.Text
 		payload := messageEntry.Text
-		sendMessageToTopic(topicName, payload, messageContainer, &messages)
+		if subject == "" {
+			subject = topicName // Fallback para o nome do tópico
+		}
+		sendMessageToTopic(subject, payload, messageContainer, &messages)
 
 		// Limpar a entrada de mensagem
 		messageEntry.SetText("")
@@ -346,7 +393,7 @@ func createTopicTabContent(topicName string, serverId int) fyne.CanvasObject {
 
 	// Cria o botão "X" para fechar a aba
 	closeButton := widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
-		dialog.NewConfirm("Delete Topic", "Are you sure you want to delete this topic?", func(confirmed bool) {
+		dialog.NewConfirm("Delete Publisher", "Are you sure you want to delete this publisher?", func(confirmed bool) {
 			if confirmed {
 				deleteTopic(topicName, serverId)
 				tab := findTabByTopicName(topicName)
@@ -359,11 +406,16 @@ func createTopicTabContent(topicName string, serverId int) fyne.CanvasObject {
 
 	return container.NewVBox(
 		container.NewHBox(
-			widget.NewLabel(fmt.Sprintf("Topic: %s", topicName)),
+			widget.NewLabel(fmt.Sprintf("Publisher: %s", topicName)),
 			closeButton,
 		),
+		widget.NewLabel("Subject:"),
+		subjectEntry,
+		widget.NewLabel("Message:"),
 		messageEntry,
 		sendButton,
+		widget.NewSeparator(),
+		widget.NewLabel("Sent Messages:"),
 		messageContainer,
 	)
 }
@@ -393,6 +445,15 @@ func sendMessageToTopic(topicName string, payload string, messageContainer *fyne
 func findTabByTopicName(topicName string) *container.TabItem {
 	for _, tab := range tabContainer.Items {
 		if tab.Text == fmt.Sprintf("topic-%v", topicName) {
+			return tab
+		}
+	}
+	return nil
+}
+
+func findTabBySubName(subName string) *container.TabItem {
+	for _, tab := range tabContainer.Items {
+		if tab.Text == fmt.Sprintf("sub-%v", subName) {
 			return tab
 		}
 	}
@@ -526,49 +587,53 @@ func loadTopics(serverID int) {
 }
 
 func addSub(window fyne.Window, serverID int) {
-	entry := widget.NewEntry()
-	entry.SetPlaceHolder("Enter sub name...")
+	nameEntry := widget.NewEntry()
+	nameEntry.SetPlaceHolder("Enter subscription name...")
+
+	subjectEntry := widget.NewEntry()
+	subjectEntry.SetPlaceHolder("Enter subject pattern (e.g., user.*, orders.>, specific.subject)")
 
 	dialog := dialog.NewForm(
-		"Add Sub",
+		"Add Subscription",
 		"Confirm",
 		"Cancel",
 		[]*widget.FormItem{
-			widget.NewFormItem("Sub Name", entry),
+			widget.NewFormItem("Subscription Name", nameEntry),
+			widget.NewFormItem("Subject Pattern", subjectEntry),
 		},
 		func(confirmed bool) {
 			if confirmed {
-				saveSub(serverID, entry.Text)
+				saveSub(serverID, nameEntry.Text, subjectEntry.Text)
 				displayServerOptions(myWindow, selectedServer.Name, selectedServer.URL)
 			}
 		},
 		window,
 	)
-	dialog.Resize(fyne.NewSize(400, 200))
+	dialog.Resize(fyne.NewSize(500, 250))
 	dialog.Show()
 }
 
-func saveSub(serverID int, subName string) {
-	if subName == "" {
+func saveSub(serverID int, subName string, subjectPattern string) {
+	if subName == "" || subjectPattern == "" {
 		return
 	}
 
-	stmt, err := db.Prepare("INSERT INTO subs(server_id, sub_name) VALUES(?, ?)")
+	stmt, err := db.Prepare("INSERT INTO subs(server_id, sub_name, subject_pattern) VALUES(?, ?, ?)")
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer stmt.Close()
 
-	_, err = stmt.Exec(serverID, subName)
+	_, err = stmt.Exec(serverID, subName, subjectPattern)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	log.Println("Sub saved:", subName)
+	log.Printf("Sub saved: %s (pattern: %s)", subName, subjectPattern)
 }
 
 func loadSubs(serverID int) {
-	rows, err := db.Query("SELECT id, sub_name FROM subs WHERE server_id = ?", serverID)
+	rows, err := db.Query("SELECT id, sub_name, COALESCE(subject_pattern, '') FROM subs WHERE server_id = ?", serverID)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -577,10 +642,11 @@ func loadSubs(serverID int) {
 	subs = []sub{}
 	for rows.Next() {
 		var s sub
-		err := rows.Scan(&s.ID, &s.SubName)
+		err := rows.Scan(&s.ID, &s.SubName, &s.SubjectPattern)
 		if err != nil {
 			log.Fatal(err)
 		}
+		s.ServerID = serverID
 		subs = append(subs, s)
 	}
 }
@@ -598,6 +664,21 @@ func deleteTopic(topicname string, serverId int) {
 	}
 
 	log.Println("Topic deleted:", topicname)
+}
+
+func deleteSub(subName string, serverId int) {
+	stmt, err := db.Prepare("DELETE FROM subs WHERE sub_name = ? AND server_id = ?")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(subName, serverId)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Println("Sub deleted:", subName)
 }
 
 func getTopicNames() []string {

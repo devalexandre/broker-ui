@@ -1,6 +1,6 @@
 [Details]
   Icon = "Icon.png"
-  Name = "Broker UI"
+  Name = "BrokerUI"
   ID = "broker.ui"
   Version = "0.0.1"
   Build = 1
