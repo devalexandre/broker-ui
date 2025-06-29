@@ -733,10 +733,10 @@ func addDashboardTab() {
 }
 
 func selfManage(a fyne.App, w fyne.Window) {
-	publicKey := ed25519.PublicKey{200, 37, 164, 131, 164, 172, 52, 181, 239, 251, 200, 30, 190, 92, 215, 209, 174, 6, 144, 222, 75, 0, 52, 75, 52, 11, 58, 59, 217, 7, 46, 75}
+	publicKey := ed25519.PublicKey{226, 162, 120, 210, 212, 122, 98, 250, 123, 180, 135, 69, 168, 77, 125, 41, 229, 245, 5, 32, 82, 254, 3, 37, 24, 224, 244, 63, 161, 123, 212, 197}
 
 	// The public key above matches the signature of the below file served by our CDN
-	httpSource := selfupdate.NewHTTPSource(nil, "https://geoffrey-artefacts.fynelabs.com/self-update/51/510d1864-0874-460d-bce6-36438c777ed4/{{.OS}}-{{.Arch}}/{{.Executable}}{{.Ext}}")
+	httpSource := selfupdate.NewHTTPSource(nil, "https://geoffrey-artefacts.fynelabs.com/self-update/5d/5de43cb1-be73-4588-9c48-b2acb6169de0/{{.OS}}-{{.Arch}}/{{.Executable}}{{.Ext}}")
 
 	config := fyneselfupdate.NewConfigWithTimeout(a, w, time.Minute, httpSource, selfupdate.Schedule{FetchOnStart: true, Interval: time.Hour * 12}, publicKey)
 
