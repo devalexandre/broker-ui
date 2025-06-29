@@ -14,13 +14,22 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"github.com/devalexandre/broker-ui/icons"
 	"github.com/devalexandre/broker-ui/natscli"
 	"github.com/devalexandre/broker-ui/themes/dracula"
+	"github.com/devalexandre/broker-ui/themes/light"
 	"github.com/fynelabs/fyneselfupdate"
 	"github.com/fynelabs/selfupdate"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/nats-io/nats.go"
 )
+
+// Ícone personalizado para alternância de tema
+var resourceThemetoggleSvg = &fyne.StaticResource{
+	StaticName: "theme_toggle.svg",
+	StaticContent: []byte(
+		"<svg width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\"><circle cx=\"8\" cy=\"12\" r=\"3\" fill=\"currentColor\" opacity=\"0.7\"/><path d=\"M8 3v2M8 19v2M3 12h2M13 12h2M5.64 5.64l1.41 1.41M10.95 10.95l1.41 1.41M5.64 18.36l1.41-1.41M10.95 13.05l1.41-1.41\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" opacity=\"0.7\"/><path d=\"M16 4c0 4.97 4.03 9 9 9-4.97 0-9-4.03-9-9z\" fill=\"currentColor\" opacity=\"0.8\" transform=\"translate(-1, 0)\"/><line x1=\"12\" y1=\"6\" x2=\"12\" y2=\"18\" stroke=\"currentColor\" stroke-width=\"1\" opacity=\"0.3\"/></svg>\n"),
+}
 
 var db *sql.DB
 var serverList *widget.List
@@ -62,6 +71,8 @@ var receivedMessages = make(map[string][]string)
 var dasboardReceivedMessages = make(map[string]int)
 
 var myWindow fyne.Window
+var myApp fyne.App
+var isDarkTheme bool = true // Controla se está usando tema escuro (Dracula) ou claro (Light)
 
 func main() {
 
@@ -97,16 +108,21 @@ func main() {
 	// Carregar servidores do banco de dados
 	loadServers()
 
-	myApp := app.New()
+	myApp = app.New()
 	myApp.Settings().SetTheme(dracula.DraculaTheme{})
 	myWindow = myApp.NewWindow("NATS Client")
 
 	// Menu Superior
 	menu := container.NewBorder(
 		nil, nil,
-		widget.NewButtonWithIcon("Add Server", theme.ContentAddIcon(), func() {
-			addServer(myWindow)
-		}),
+		container.NewHBox(
+			widget.NewButtonWithIcon("Add Server", theme.ContentAddIcon(), func() {
+				addServer(myWindow)
+			}),
+			widget.NewButtonWithIcon("Theme", icons.ThemeToggleIcon(), func() {
+				toggleTheme()
+			}),
+		),
 		widget.NewButtonWithIcon("Exit", theme.CancelIcon(), func() {
 			myApp.Quit()
 		}),
@@ -730,6 +746,21 @@ func addDashboardTab() {
 			time.Sleep(1 * time.Second)
 		}
 	}()
+}
+
+// toggleTheme alterna entre o tema escuro (Dracula) e claro (Light)
+func toggleTheme() {
+	if isDarkTheme {
+		// Mudar para tema claro
+		myApp.Settings().SetTheme(light.LightTheme{})
+		isDarkTheme = false
+		log.Println("Switched to Light theme")
+	} else {
+		// Mudar para tema escuro
+		myApp.Settings().SetTheme(dracula.DraculaTheme{})
+		isDarkTheme = true
+		log.Println("Switched to Dracula theme")
+	}
 }
 
 func selfManage(a fyne.App, w fyne.Window) {
