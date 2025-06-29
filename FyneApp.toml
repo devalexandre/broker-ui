@@ -1,6 +1,6 @@
 [Details]
   Icon = "Icon.png"
-  Name = "RelayNova"
-  ID = "relay.nova.com"
-  Version = "0.0.2"
-  Build = 15
+  Name = "Broker UI"
+  ID = "broker.ui"
+  Version = "0.0.1"
+  Build = 1

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/ed25519"
 	"database/sql"
 	"fmt"
 	"log"
@@ -60,6 +61,7 @@ var dasboardReceivedMessages = make(map[string]int)
 var myWindow fyne.Window
 
 func main() {
+
 	// Inicializar o banco de dados SQLite3
 	var err error
 	db, err = sql.Open("sqlite3", "./nats_servers.db")
@@ -145,9 +147,13 @@ Developed by [Alexandre E Souza](https://www.linkedin.com/in/devevantelista)
 
 	content := container.NewBorder(menu, nil, nil, nil, mainContent)
 
+	//update
+	selfManage(myApp, myWindow)
+
 	myWindow.SetContent(content)
 	myWindow.Resize(fyne.NewSize(800, 600))
 	myWindow.ShowAndRun()
+
 }
 
 func displayServerOptions(window fyne.Window, name string, url string) {
@@ -641,4 +647,19 @@ func addDashboardTab() {
 			time.Sleep(1 * time.Second)
 		}
 	}()
+}
+
+// selfManage turns on automatic updates
+func selfManage(a fyne.App, w fyne.Window) {
+	publicKey := ed25519.PublicKey{119, 74, 124, 79, 146, 202, 6, 214, 121, 135, 49, 80, 146, 127, 88, 29, 133, 69, 58, 115, 234, 47, 160, 80, 17, 102, 7, 188, 131, 198, 213, 43}
+
+	// The public key above matches the signature of the below file served by our CDN
+	httpSource := selfupdate.NewHTTPSource(nil, "https://geoffrey-artefacts.fynelabs.com/self-update/a2/a2486f1c-c255-4ca6-9b37-abf98db85117/{{.OS}}-{{.Arch}}/{{.Executable}}{{.Ext}}")
+
+	config := fyneselfupdate.NewConfigWithTimeout(a, w, time.Minute, httpSource, selfupdate.Schedule{FetchOnStart: true, Interval: time.Hour * 12}, publicKey)
+
+	_, err := selfupdate.Manage(config)
+	if err != nil {
+		fyne.LogError("Failed to set up update manager", err)
+	}
 }
