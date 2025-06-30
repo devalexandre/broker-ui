@@ -9,16 +9,22 @@ import (
 	"fyne.io/fyne/v2"
 )
 
+var baseurl = "https://github.com/devalexandre/broker-ui/blob/master/icons/png/"
+
+func getIcons(name string) string {
+	return fmt.Sprintf("https://github.com/devalexandre/broker-ui/blob/master/icons/png/%s?raw=true", name)
+}
+
 // ThemeToggleIcon returns the appropriate theme toggle icon based on current theme
 func ThemeToggleIcon(isDark bool) fyne.Resource {
 	var iconPath string
 	if isDark {
-		iconPath = "icons/png/light-mode.png" // Show light mode icon when in dark theme
+		iconPath = getIcons("light-mode.png") // Show light mode icon when in dark theme
 	} else {
-		iconPath = "icons/png/dark-mode.png" // Show dark mode icon when in light theme
+		iconPath = getIcons("dark-mode.png") // Show dark mode icon when in light theme
 	}
 
-	resource, err := fyne.LoadResourceFromPath(iconPath)
+	resource, err := fyne.LoadResourceFromURLString(iconPath)
 	if err != nil {
 		fmt.Printf("Error loading theme toggle icon: %v\n", err)
 		return nil
@@ -28,7 +34,7 @@ func ThemeToggleIcon(isDark bool) fyne.Resource {
 
 // AddServerIcon returns the add server icon
 func AddServerIcon() fyne.Resource {
-	resource, err := fyne.LoadResourceFromPath("icons/png/add-server.png")
+	resource, err := fyne.LoadResourceFromURLString(getIcons("add-server.png"))
 	if err != nil {
 		fmt.Printf("Error loading add server icon: %v\n", err)
 		return nil
@@ -38,7 +44,7 @@ func AddServerIcon() fyne.Resource {
 
 // ExitIcon returns the exit icon
 func ExitIcon() fyne.Resource {
-	resource, err := fyne.LoadResourceFromPath("icons/png/exit.png")
+	resource, err := fyne.LoadResourceFromURLString(getIcons("exit.png"))
 	if err != nil {
 		fmt.Printf("Error loading exit icon: %v\n", err)
 		return nil
@@ -48,7 +54,7 @@ func ExitIcon() fyne.Resource {
 
 // PublisherIcon returns the publisher icon
 func PublisherIcon() fyne.Resource {
-	resource, err := fyne.LoadResourceFromPath("icons/png/publisher.png")
+	resource, err := fyne.LoadResourceFromURLString(getIcons("publisher.png"))
 	if err != nil {
 		fmt.Printf("Error loading publisher icon: %v\n", err)
 		return nil
@@ -58,7 +64,7 @@ func PublisherIcon() fyne.Resource {
 
 // SubscriberIcon returns the subscriber icon
 func SubscriberIcon() fyne.Resource {
-	resource, err := fyne.LoadResourceFromPath("icons/png/subscriber.png")
+	resource, err := fyne.LoadResourceFromURLString(getIcons("subscriber.png"))
 	if err != nil {
 		fmt.Printf("Error loading subscriber icon: %v\n", err)
 		return nil
