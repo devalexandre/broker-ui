@@ -1,5 +1,5 @@
-APP_NAME := nats.client.com
-VERSION := 0.0.2
+APP_NAME := broker.ui.com
+VERSION := 0.0.4
 BUILD_DIR := build
 
 
