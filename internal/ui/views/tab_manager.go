@@ -39,11 +39,11 @@ func (tm *TabManager) GetTabContainer() *container.AppTabs {
 
 // ShowWelcome shows the welcome tab
 func (tm *TabManager) ShowWelcome() {
-	markdownContent := `# Welcome to NATS Client
+	markdownContent := `# Welcome to Broker UI
 
-This application allows you to connect to **NATS** servers, create topics, and subscribe to subjects.
+This application allows you to connect to **NATS** , **RabbitMQ** , and other message brokers, create topics, and subscribe to subjects.
 
-- **Add Server**: Add a new NATS server connection.
+- **Add Server**: Add a new server connection.
 - **Topics**: Publish messages to topics.
 - **Subscriptions**: Receive messages from subjects.
 
@@ -58,6 +58,62 @@ Developed by [Alexandre E Souza](https://www.linkedin.com/in/devevantelista)
 func (tm *TabManager) ClearTabs() {
 	tm.tabContainer.Items = []*container.TabItem{}
 	tm.tabContainer.Refresh()
+}
+
+// RefreshServerTabs reloads all tabs for a specific server
+func (tm *TabManager) RefreshServerTabs(serverID int) {
+	// Get server info
+	servers, err := tm.serverService.GetAllServers()
+	if err != nil {
+		log.Printf("Error getting servers: %v", err)
+		return
+	}
+
+	var currentServer models.Server
+	found := false
+	for _, server := range servers {
+		if server.ID == serverID {
+			currentServer = server
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		log.Printf("Server with ID %d not found", serverID)
+		return
+	}
+
+	// Clear existing tabs
+	tm.ClearTabs()
+
+	// Add server config tab
+	tm.AddServerConfigTab(currentServer)
+
+	// Load and add topic tabs
+	topics, err := tm.serverService.GetTopicsForServer(serverID)
+	if err != nil {
+		log.Printf("Error loading topics: %v", err)
+	} else {
+		for _, topic := range topics {
+			tm.AddTopicTab(topic)
+		}
+	}
+
+	// Load and add subscription tabs
+	subscriptions, err := tm.serverService.GetSubscriptionsForServer(serverID)
+	if err != nil {
+		log.Printf("Error loading subscriptions: %v", err)
+	} else {
+		for _, sub := range subscriptions {
+			tm.AddSubscriptionTab(sub)
+		}
+		// Add dashboard tab
+		tm.AddDashboardTab(subscriptions)
+	}
+
+	tm.tabContainer.Refresh()
+	log.Printf("Refreshed tabs for server %d", serverID)
 }
 
 // AddServerConfigTab adds a configuration tab for the server
@@ -220,8 +276,14 @@ func (tm *TabManager) showAddTopicDialog(serverID int) {
 		},
 		func(confirmed bool) {
 			if confirmed && entry.Text != "" {
-				tm.messageService.SaveTopic(serverID, entry.Text)
-				// Refresh the server view would go here
+				err := tm.messageService.SaveTopic(serverID, entry.Text)
+				if err != nil {
+					log.Printf("Error saving topic: %v", err)
+					components.ErrorDialog(err, tm.window)
+					return
+				}
+				// Refresh the server tabs to show the new topic
+				tm.RefreshServerTabs(serverID)
 			}
 		},
 		tm.window,
@@ -246,8 +308,14 @@ func (tm *TabManager) showAddSubscriptionDialog(serverID int) {
 		},
 		func(confirmed bool) {
 			if confirmed && nameEntry.Text != "" && subjectEntry.Text != "" {
-				tm.messageService.SaveSubscription(serverID, nameEntry.Text, subjectEntry.Text)
-				// Refresh the server view would go here
+				err := tm.messageService.SaveSubscription(serverID, nameEntry.Text, subjectEntry.Text)
+				if err != nil {
+					log.Printf("Error saving subscription: %v", err)
+					components.ErrorDialog(err, tm.window)
+					return
+				}
+				// Refresh the server tabs to show the new subscription
+				tm.RefreshServerTabs(serverID)
 			}
 		},
 		tm.window,
