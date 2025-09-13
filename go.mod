@@ -1,6 +1,6 @@
 module github.com/devalexandre/broker-ui
 
-go 1.24.0
+go 1.19
 
 require (
 	fyne.io/fyne/v2 v2.5.0
@@ -8,7 +8,10 @@ require (
 	github.com/nats-io/nats.go v1.36.0
 )
 
-require github.com/rabbitmq/amqp091-go v1.10.0
+require (
+	cloud.google.com/go/pubsub v1.50.1
+	github.com/rabbitmq/amqp091-go v1.10.0
+)
 
 require (
 	cloud.google.com/go v0.121.6 // indirect
@@ -16,7 +19,6 @@ require (
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.8.0 // indirect
 	cloud.google.com/go/iam v1.5.2 // indirect
-	cloud.google.com/go/pubsub v1.50.1 // indirect
 	cloud.google.com/go/pubsub/v2 v2.0.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
