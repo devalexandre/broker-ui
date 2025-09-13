@@ -41,7 +41,10 @@ func (tm *TabManager) GetTabContainer() *container.AppTabs {
 func (tm *TabManager) ShowWelcome() {
 	markdownContent := `# Welcome to Broker UI
 
-This application allows you to connect to **NATS** , **RabbitMQ** , and other message brokers, create topics, and subscribe to subjects.
+This application allows you to connect to **NATS** , **RabbitMQ** , and other message brokers,
+
+
+create topics, and subscribe to subjects.
 
 - **Add Server**: Add a new server connection.
 - **Topics**: Publish messages to topics.
