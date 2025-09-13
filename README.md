@@ -21,7 +21,7 @@ The application has been completely refactored with a **pluggable messaging arch
 | **Redis** | 📋 **Planned** | Pub/Sub, Streams |
 | **MQTT** | 📋 **Planned** | IoT Messaging |
 
-## 🚀 Features
+## 🚀 Features 
 
 ### 🌐 Universal Messaging Support
 - **Multi-Provider**: Connect to different messaging systems simultaneously
