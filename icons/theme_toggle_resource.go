@@ -65,3 +65,13 @@ func SubscriberIcon() fyne.Resource {
 	}
 	return resource
 }
+
+// TrashBinIcon returns the trash bin icon
+func TrashBinIcon() fyne.Resource {
+	resource, err := fyne.LoadResourceFromPath("icons/png/trash-bin.png")
+	if err != nil {
+		fmt.Printf("Error loading trash bin icon: %v\n", err)
+		return nil
+	}
+	return resource
+}

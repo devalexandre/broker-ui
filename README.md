@@ -15,7 +15,7 @@ The application has been completely refactored with a **pluggable messaging arch
 | Provider | Status | Features |
 |----------|--------|----------|
 | **NATS** | ✅ **Fully Implemented** | Wildcards (`*`, `>`), Real-time Pub/Sub |
-| **RabbitMQ** | 🚧 **Structure Ready** | Exchanges, Routing Keys, Queues |
+| **RabbitMQ** | ✅ **Fully Implemented** | Exchanges, Routing Keys, Queues, AMQP 0.9.1 |
 | **Kafka** | 📋 **Planned** | Topics, Partitions, Consumer Groups |
 | **Redis** | 📋 **Planned** | Pub/Sub, Streams |
 | **MQTT** | 📋 **Planned** | IoT Messaging |
@@ -84,8 +84,23 @@ The application has been completely refactored with a **pluggable messaging arch
 ### Prerequisites
 - Go 1.19 or higher
 - Git
+- Docker and Docker Compose (optional, for testing with local messaging servers)
 
-### Build
+### Quick Start with Docker
+```bash
+git clone https://github.com/devalexandre/broker-ui.git
+cd broker-ui
+
+# Start messaging servers (NATS and RabbitMQ)
+docker-compose up -d
+
+# Build and run the application
+go mod tidy
+go build -o broker-ui
+./broker-ui
+```
+
+### Build Only
 ```bash
 git clone https://github.com/devalexandre/broker-ui.git
 cd broker-ui
@@ -93,19 +108,27 @@ go mod tidy
 go build -o broker-ui
 ```
 
-### Run
-```bash
-./broker-ui
-```
+### Connection Examples
+**Simple URLs (protocol added automatically):**
+- **NATS**: `localhost:4222`
+- **RabbitMQ**: `admin:admin123@localhost:5672/`
+
+**Full URLs (also supported):**
+- **NATS**: `nats://localhost:4222`
+- **RabbitMQ**: `amqp://admin:admin123@localhost:5672/`
+
+### Management Interfaces
+- **NATS Monitoring**: http://localhost:8222
+- **RabbitMQ Management**: http://localhost:15672 (admin/admin123)
 
 ## 🎯 How to Use
 
 ### 1. Connect to a Messaging Server
 1. Click "Add Server"
 2. Select the messaging provider (NATS, RabbitMQ, etc.)
-3. Enter server name and connection URL
-   - **NATS**: `nats://localhost:4222`
-   - **RabbitMQ**: `amqp://localhost:5672` (coming soon)
+3. Enter server name and connection URL (protocol is added automatically):
+   - **NATS**: `localhost:4222` or `nats://localhost:4222`
+   - **RabbitMQ**: `admin:admin123@localhost:5672/` or `amqp://admin:admin123@localhost:5672/`
 4. Click "Confirm"
 5. Select the server from the side list
 
@@ -120,7 +143,7 @@ go build -o broker-ui
 2. Enter the subscription name
 3. Configure the subject pattern
    - **NATS**: `user.*`, `orders.>`, etc.
-   - **RabbitMQ**: Queue patterns (coming soon)
+   - **RabbitMQ**: Queue names like `user_events`, `order_processing`, etc.
 4. Messages will appear automatically in the tab
 
 ### 4. Monitor Activity

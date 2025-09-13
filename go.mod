@@ -8,6 +8,8 @@ require (
 	github.com/nats-io/nats.go v1.36.0
 )
 
+require github.com/rabbitmq/amqp091-go v1.10.0
+
 require (
 	fyne.io/systray v1.11.0 // indirect
 	github.com/BurntSushi/toml v1.4.0 // indirect

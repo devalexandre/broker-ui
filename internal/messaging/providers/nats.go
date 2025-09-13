@@ -2,6 +2,7 @@ package providers
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/devalexandre/broker-ui/internal/messaging"
@@ -35,13 +36,19 @@ func (n *NATSProvider) Connect(url string) error {
 		return nil
 	}
 
-	conn, err := nats.Connect(url)
+	// Add nats:// protocol if not present
+	connectionURL := url
+	if !strings.HasPrefix(url, "nats://") && !strings.HasPrefix(url, "tls://") {
+		connectionURL = "nats://" + url
+	}
+
+	conn, err := nats.Connect(connectionURL)
 	if err != nil {
-		return fmt.Errorf("failed to connect to NATS server at %s: %w", url, err)
+		return fmt.Errorf("failed to connect to NATS server at %s: %w", connectionURL, err)
 	}
 
 	n.conn = conn
-	n.url = url
+	n.url = connectionURL
 	n.connected = true
 
 	fmt.Printf("Connected to NATS server at %s\n", url)

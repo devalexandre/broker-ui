@@ -78,13 +78,31 @@ func (mw *MainWindow) setupUI() {
 
 	// Create server list
 	mw.serverList = widget.NewList(
-		func() int { return len(mw.servers) },
+		func() int {
+			return len(mw.servers)
+		},
 		func() fyne.CanvasObject {
-			return widget.NewLabel("Server Name")
+			// Create a container with server name and delete button
+			nameLabel := widget.NewLabel("Server Name")
+			deleteBtn := widget.NewButtonWithIcon("", icons.TrashBinIcon(), func() {})
+			deleteBtn.Resize(fyne.NewSize(24, 24)) // Small delete button
+
+			return container.NewBorder(nil, nil, nil, deleteBtn, nameLabel)
 		},
 		func(i widget.ListItemID, o fyne.CanvasObject) {
 			if i < len(mw.servers) {
-				o.(*widget.Label).SetText(mw.servers[i].Name)
+				server := mw.servers[i]
+				borderContainer := o.(*fyne.Container)
+
+				// Update the label (first object in the container)
+				nameLabel := borderContainer.Objects[0].(*widget.Label)
+				nameLabel.SetText(server.Name)
+
+				// Update the delete button action (second object in the container)
+				deleteBtn := borderContainer.Objects[1].(*widget.Button)
+				deleteBtn.OnTapped = func() {
+					mw.showDeleteServerConfirmation(server)
+				}
 			}
 		},
 	)
@@ -99,15 +117,27 @@ func (mw *MainWindow) setupUI() {
 	mw.tabManager.ShowWelcome()
 
 	// Main layout
+	// Create a border container for the server list with a header
+	serversHeader := widget.NewLabel("Servers")
+	serversHeader.TextStyle = fyne.TextStyle{Bold: true}
+
+	serverListContainer := container.NewBorder(
+		serversHeader, // top
+		nil,           // bottom
+		nil,           // left
+		nil,           // right
+		mw.serverList, // center - this will take all remaining space
+	)
+
 	mainContent := container.NewHSplit(
-		container.NewVBox(mw.serverList),
+		serverListContainer,
 		mw.tabManager.GetTabContainer(),
 	)
-	mainContent.Offset = 0.2
+	mainContent.Offset = 0.3 // Increased from 0.25 to 0.3 (20% wider)
 
 	content := container.NewBorder(menu, nil, nil, nil, mainContent)
 	mw.window.SetContent(content)
-	mw.window.Resize(fyne.NewSize(800, 600))
+	mw.window.Resize(fyne.NewSize(900, 600))
 }
 
 // Run starts the application
@@ -133,11 +163,14 @@ func (mw *MainWindow) loadServers() {
 		return
 	}
 
+	log.Printf("Loaded %d servers from database", len(servers))
 	mw.servers = servers
-	mw.serverList.Refresh()
-}
 
-// selectServer handles server selection
+	// Force the list to rebuild completely
+	mw.serverList.Refresh()
+
+	log.Printf("Server list refreshed with %d items", len(mw.servers))
+} // selectServer handles server selection
 func (mw *MainWindow) selectServer(server models.Server) {
 	// Clear existing tabs
 	mw.tabManager.ClearTabs()
@@ -184,9 +217,12 @@ func (mw *MainWindow) showAddServerDialog() {
 	urlEntry := widget.NewEntry()
 	urlEntry.SetPlaceHolder("Enter server URL...")
 
-	// Provider type selection
-	providerSelect := widget.NewSelect([]string{"NATS"}, func(value string) {})
-	providerSelect.SetSelected("NATS")
+	// Provider type selection - get supported providers dynamically
+	supportedProviders := mw.serverService.GetSupportedProviders()
+	providerSelect := widget.NewSelect(supportedProviders, func(value string) {})
+	if len(supportedProviders) > 0 {
+		providerSelect.SetSelected(supportedProviders[0])
+	}
 
 	dialog := components.FormDialog(
 		"Add Server",
@@ -231,4 +267,28 @@ func (mw *MainWindow) toggleTheme() {
 // getThemeIcon returns the appropriate theme icon
 func getThemeIcon(isDarkTheme bool) fyne.Resource {
 	return icons.ThemeToggleIcon(isDarkTheme)
+}
+
+// showDeleteServerConfirmation shows a confirmation dialog before deleting a server
+func (mw *MainWindow) showDeleteServerConfirmation(server models.Server) {
+	dialog := components.ConfirmDialog(
+		"Delete Server",
+		"Are you sure you want to delete the server '"+server.Name+"'?\n\nThis action cannot be undone.",
+		func(confirmed bool) {
+			if confirmed {
+				err := mw.serverService.DeleteServer(server.ID)
+				if err != nil {
+					components.ErrorDialog(err, mw.window)
+					return
+				}
+				// Reload the server list
+				mw.loadServers()
+				// Clear tabs if this was the selected server
+				mw.tabManager.ClearTabs()
+				mw.tabManager.ShowWelcome()
+			}
+		},
+		mw.window,
+	)
+	dialog.Show()
 }

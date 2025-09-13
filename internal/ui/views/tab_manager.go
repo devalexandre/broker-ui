@@ -262,8 +262,9 @@ func (tm *TabManager) showEditServerDialog(server models.Server) {
 	urlEntry := widget.NewEntry()
 	urlEntry.SetText(server.URL)
 
-	// Provider type selection
-	providerSelect := widget.NewSelect([]string{"NATS"}, func(value string) {})
+	// Provider type selection - get supported providers dynamically
+	supportedProviders := tm.serverService.GetSupportedProviders()
+	providerSelect := widget.NewSelect(supportedProviders, func(value string) {})
 	providerSelect.SetSelected(string(server.ProviderType))
 
 	dialog := components.FormDialog(

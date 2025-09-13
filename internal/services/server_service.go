@@ -43,6 +43,18 @@ func (s *ServerService) UpdateServer(serverID int, name, url string, providerTyp
 	return s.serverRepo.Update(serverID, name, url, providerType)
 }
 
+// DeleteServer deletes a server and disconnects from it
+func (s *ServerService) DeleteServer(serverID int) error {
+	// Close connection if exists
+	if provider, exists := s.messagingProviders[serverID]; exists {
+		provider.Close()
+		delete(s.messagingProviders, serverID)
+	}
+
+	// Delete from database
+	return s.serverRepo.Delete(serverID)
+}
+
 // ConnectToServer establishes a connection to a messaging server
 func (s *ServerService) ConnectToServer(serverID int, url string, providerType messaging.ProviderType) error {
 	provider, err := s.providerFactory.CreateProvider(providerType)
@@ -81,4 +93,14 @@ func (s *ServerService) GetTopicsForServer(serverID int) ([]models.Topic, error)
 // GetSubscriptionsForServer returns all subscriptions for a server
 func (s *ServerService) GetSubscriptionsForServer(serverID int) ([]models.Subscription, error) {
 	return s.subscriptionRepo.GetByServerID(serverID)
+}
+
+// GetSupportedProviders returns the list of supported messaging providers
+func (s *ServerService) GetSupportedProviders() []string {
+	providers := s.providerFactory.(*providers.Factory).GetSupportedProviders()
+	result := make([]string, len(providers))
+	for i, provider := range providers {
+		result[i] = string(provider)
+	}
+	return result
 }

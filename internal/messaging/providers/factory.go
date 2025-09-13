@@ -20,8 +20,7 @@ func (f *Factory) CreateProvider(providerType messaging.ProviderType) (messaging
 	case messaging.ProviderNATS:
 		return NewNATSProvider(), nil
 	case messaging.ProviderRabbitMQ:
-		// TODO: Implement RabbitMQ provider
-		return nil, fmt.Errorf("RabbitMQ provider not implemented yet")
+		return NewRabbitMQProvider(), nil
 	case messaging.ProviderKafka:
 		// TODO: Implement Kafka provider
 		return nil, fmt.Errorf("Kafka provider not implemented yet")
@@ -37,7 +36,7 @@ func (f *Factory) CreateProvider(providerType messaging.ProviderType) (messaging
 func (f *Factory) GetSupportedProviders() []messaging.ProviderType {
 	return []messaging.ProviderType{
 		messaging.ProviderNATS,
-		// messaging.ProviderRabbitMQ, // TODO: Uncomment when implemented
+		messaging.ProviderRabbitMQ,
 		// messaging.ProviderKafka,    // TODO: Uncomment when implemented
 		// messaging.ProviderRedis,    // TODO: Uncomment when implemented
 	}
