@@ -2,6 +2,7 @@ package providers
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/devalexandre/broker-ui/internal/messaging"
 )
@@ -21,6 +22,8 @@ func (f *Factory) CreateProvider(providerType messaging.ProviderType) (messaging
 		return NewNATSProvider(), nil
 	case messaging.ProviderRabbitMQ:
 		return NewRabbitMQProvider(), nil
+	case messaging.ProviderPubSub:
+		return NewPubSubProvider(), nil
 	case messaging.ProviderKafka:
 		// TODO: Implement Kafka provider
 		return nil, fmt.Errorf("Kafka provider not implemented yet")
@@ -37,7 +40,35 @@ func (f *Factory) GetSupportedProviders() []messaging.ProviderType {
 	return []messaging.ProviderType{
 		messaging.ProviderNATS,
 		messaging.ProviderRabbitMQ,
+		messaging.ProviderPubSub,
 		// messaging.ProviderKafka,    // TODO: Uncomment when implemented
 		// messaging.ProviderRedis,    // TODO: Uncomment when implemented
 	}
+}
+
+// DetectProviderFromURL attempts to detect the provider type from a URL
+func (f *Factory) DetectProviderFromURL(url string) messaging.ProviderType {
+	url = strings.ToLower(url)
+
+	// Check for specific protocols
+	if strings.HasPrefix(url, "nats://") || strings.Contains(url, ":4222") {
+		return messaging.ProviderNATS
+	}
+
+	if strings.HasPrefix(url, "amqp://") || strings.HasPrefix(url, "amqps://") || strings.Contains(url, ":5672") {
+		return messaging.ProviderRabbitMQ
+	}
+
+	// Check for Pub/Sub patterns
+	if strings.Contains(url, ":8085") || strings.Contains(url, "pubsub") || strings.HasPrefix(url, "gcp://") {
+		return messaging.ProviderPubSub
+	}
+
+	// Check if it looks like a GCP project ID (no special chars, reasonable length)
+	if !strings.Contains(url, ":") && !strings.Contains(url, "/") && len(url) > 3 && len(url) < 64 {
+		return messaging.ProviderPubSub
+	}
+
+	// Default to NATS if no specific pattern is detected
+	return messaging.ProviderNATS
 }

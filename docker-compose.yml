@@ -17,5 +17,14 @@ services:
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
 
+  pubsub-emulator:
+    image: google/cloud-sdk:latest # You can use the official gcloud SDK image
+    command: gcloud beta emulators pubsub start --project=dev-local --host-port=0.0.0.0:8085
+    ports:
+      - "8085:8085" # Map the emulator port to your host
+    environment:
+      # Optional: Set environment variables for your application to connect to the emulator
+      PUBSUB_EMULATOR_HOST: "pubsub-emulator:8085"
+      PUBSUB_PROJECT_ID: "dev-local"
 volumes:
   rabbitmq_data:

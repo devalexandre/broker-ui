@@ -43,7 +43,7 @@ func NewMainWindow(db *database.Database) *MainWindow {
 	// Create Fyne app
 	myApp := app.New()
 	myApp.Settings().SetTheme(dracula.DraculaTheme{})
-	myWindow := myApp.NewWindow("NATS Client")
+	myWindow := myApp.NewWindow("Broker UI")
 
 	mw := &MainWindow{
 		app:            myApp,

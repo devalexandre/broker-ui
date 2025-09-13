@@ -2,7 +2,7 @@
 
 ![Broker UI](assets/screenshot.png)
 
-A modern, universal desktop application for managing multiple messaging systems, built with Go and Fyne. This tool provides a unified interface to connect to various message brokers including NATS, RabbitMQ, Kafka, and more.
+A modern, universal desktop application for managing multiple messaging systems, built with Go and Fyne. This tool provides a unified interface to connect to various message brokers including NATS, RabbitMQ, Google Cloud Pub/Sub, and more.
 
 [Download](https://geoffrey-artefacts.fynelabs.com/github/devalexandre/devalexandre/broker-ui/825/index.html)
 
@@ -14,8 +14,9 @@ The application has been completely refactored with a **pluggable messaging arch
 
 | Provider | Status | Features |
 |----------|--------|----------|
-| **NATS** | ✅ **Fully Implemented** | Wildcards (`*`, `>`), Real-time Pub/Sub |
+| **NATS** | ✅ **Fully Implemented** | Wildcards (`*`, `>`), Real-time Pub/Sub, Authentication |
 | **RabbitMQ** | ✅ **Fully Implemented** | Exchanges, Routing Keys, Queues, AMQP 0.9.1 |
+| **Google Cloud Pub/Sub** | ✅ **Fully Implemented** | Topics, Subscriptions, Emulator Support, GCP Production |
 | **Kafka** | 📋 **Planned** | Topics, Partitions, Consumer Groups |
 | **Redis** | 📋 **Planned** | Pub/Sub, Streams |
 | **MQTT** | 📋 **Planned** | IoT Messaging |
@@ -69,15 +70,38 @@ The application has been completely refactored with a **pluggable messaging arch
 - **Periodic Check**: Search for updates every 12 hours
 - **Digital Signature**: Cryptographically verified updates
 
+### 🗑️ Enhanced UI Features
+- **Server Management**: Add, edit, and delete server connections with confirmation dialogs
+- **Tab Auto-Refresh**: Publisher/Subscriber tabs load automatically when created
+- **Custom Icons**: Trash bin icons for delete operations, provider-specific icons
+- **Responsive Layout**: Adjustable panel widths and responsive design
+- **Error Handling**: Comprehensive error dialogs and validation
+
+## 🆕 Recent Updates
+
+### Version 3.0 - Multi-Provider Architecture
+- ✅ **Google Cloud Pub/Sub Support**: Full implementation with emulator and production support
+- ✅ **Provider Auto-Detection**: Intelligent protocol detection from URLs
+- ✅ **Enhanced UI**: Automatic tab refresh, delete confirmations, improved layouts
+- ✅ **Bug Fixes**: Fixed tab loading issues, improved error handling
+- ✅ **GitHub Actions**: Updated CI/CD pipeline with latest artifact actions
+
+### Key Improvements
+- **Real-time Tab Updates**: No more manual refresh needed when adding publishers/subscribers
+- **Smart URL Parsing**: Automatic provider detection for seamless connections
+- **Enhanced Server Management**: Full CRUD operations with user-friendly confirmations
+- **Production-Ready**: Support for both local development and cloud production environments
+
 ## 🛠️ Technologies Used
 
-- **Go**: Main programming language
-- **Fyne**: Cross-platform GUI framework
-- **NATS**: Primary messaging system implementation
-- **RabbitMQ**: Alternative messaging system (future support)
-- **SQLite**: Local database with automatic migrations
-- **Crypto/Ed25519**: Digital signature verification for updates
-- **Clean Architecture**: Modular design with separation of concerns
+- **Go**: Main programming language with latest Go 1.24 support
+- **Fyne**: Cross-platform GUI framework for modern interfaces
+- **NATS**: High-performance messaging system with wildcards and real-time pub/sub
+- **RabbitMQ**: Robust AMQP 0.9.1 implementation with exchanges and routing
+- **Google Cloud Pub/Sub**: Enterprise-grade messaging with emulator and production support
+- **SQLite**: Local database with automatic migrations and schema updates
+- **Crypto/Ed25519**: Digital signature verification for secure updates
+- **Clean Architecture**: Modular design with separation of concerns and provider abstraction
 
 ## 📦 Installation
 
@@ -91,7 +115,7 @@ The application has been completely refactored with a **pluggable messaging arch
 git clone https://github.com/devalexandre/broker-ui.git
 cd broker-ui
 
-# Start messaging servers (NATS and RabbitMQ)
+# Start messaging servers (NATS, RabbitMQ, and Pub/Sub Emulator)
 docker-compose up -d
 
 # Build and run the application
@@ -112,45 +136,82 @@ go build -o broker-ui
 **Simple URLs (protocol added automatically):**
 - **NATS**: `localhost:4222`
 - **RabbitMQ**: `admin:admin123@localhost:5672/`
+- **Google Cloud Pub/Sub (Emulator)**: `localhost:8085`
+- **Google Cloud Pub/Sub (Production)**: `my-project-id` or `gcp://my-project-id`
 
 **Full URLs (also supported):**
 - **NATS**: `nats://localhost:4222`
 - **RabbitMQ**: `amqp://admin:admin123@localhost:5672/`
+- **Pub/Sub**: Auto-detected based on URL pattern
 
 ### Management Interfaces
 - **NATS Monitoring**: http://localhost:8222
 - **RabbitMQ Management**: http://localhost:15672 (admin/admin123)
+- **Pub/Sub Emulator**: Runs on localhost:8085 (no web interface)
+
+### Google Cloud Pub/Sub Setup
+
+#### Local Development (Emulator)
+The docker-compose includes a Pub/Sub emulator that runs locally:
+```bash
+# Start the emulator
+docker-compose up pubsub-emulator -d
+
+# Connect using: localhost:8085
+```
+
+#### Production (Google Cloud)
+For production GCP connections:
+1. **Service Account**: Set up a service account with Pub/Sub permissions
+2. **Authentication**: Use one of these methods:
+   ```bash
+   # Option 1: Service Account Key
+   export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account.json"
+   
+   # Option 2: gcloud CLI
+   gcloud auth application-default login
+   ```
+3. **Connection**: Use your project ID as the URL: `my-production-project`
 
 ## 🎯 How to Use
 
 ### 1. Connect to a Messaging Server
 1. Click "Add Server"
-2. Select the messaging provider (NATS, RabbitMQ, etc.)
-3. Enter server name and connection URL (protocol is added automatically):
+2. Select the messaging provider (NATS, RabbitMQ, PUBSUB)
+3. Enter server name and connection URL:
    - **NATS**: `localhost:4222` or `nats://localhost:4222`
    - **RabbitMQ**: `admin:admin123@localhost:5672/` or `amqp://admin:admin123@localhost:5672/`
-4. Click "Confirm"
-5. Select the server from the side list
+   - **Pub/Sub Emulator**: `localhost:8085`
+   - **Pub/Sub Production**: `my-project-id`
+4. Click "Confirm" - the provider is auto-detected from the URL
+5. Select the server from the side list to connect
 
-### 2. Create a Publisher
-1. With a connected server, click "Add Publisher"
+### 2. Create a Publisher (Topic)
+1. With a connected server, click "Add Topic" from the server menu
 2. Enter the topic name
-3. Use the created tab to send messages
-4. Customize the subject/routing key if needed
+3. **The tab appears automatically** with the publisher interface
+4. Use the tab to send messages with custom subjects/routing keys
 
 ### 3. Create a Subscriber
-1. Click "Add Subscriber"
-2. Enter the subscription name
-3. Configure the subject pattern
-   - **NATS**: `user.*`, `orders.>`, etc.
-   - **RabbitMQ**: Queue names like `user_events`, `order_processing`, etc.
-4. Messages will appear automatically in the tab
+1. Click "Add Subscription" from the server menu
+2. Enter the subscription name and subject pattern:
+   - **NATS**: `user.*`, `orders.>`, `specific.subject`
+   - **RabbitMQ**: Queue names like `user_events`, `order_processing`
+   - **Pub/Sub**: Topic names like `user-events`, `order-processing`
+3. **The tab appears automatically** with the subscriber interface
+4. Messages appear in real-time as they arrive
 
-### 4. Monitor Activity
+### 4. Server Management
+- **Edit Servers**: Click the edit button in any server tab to modify connection details
+- **Delete Servers**: Click the trash icon next to any server in the list (with confirmation)
+- **Multiple Providers**: Connect to different messaging systems simultaneously
+- **Auto-Detection**: Provider type is automatically detected from URL patterns
+
+### 5. Monitor Activity
 - Use the "Dashboard" tab to see unified statistics across all providers
-- Each subscriber tab shows messages in real-time
+- Each subscriber tab shows messages in real-time with provider identification
 - Publishers maintain a history of sent messages
-- Provider identification shows which system each message came from
+- Cross-provider monitoring shows activity from all connected systems
 
 ## 🎨 Visual Resources
 
@@ -160,6 +221,7 @@ go build -o broker-ui
 - **Exit**: Elegant exit icon
 - **Publisher**: Specific icon for publishers
 - **Subscriber**: Specific icon for subscribers
+- **Delete Operations**: Custom trash bin icons for server deletion
 - **Provider Icons**: Visual identification for different messaging systems
 
 ### Themes
@@ -190,7 +252,8 @@ broker-ui/
 │   │   └── providers/
 │   │       ├── factory.go
 │   │       ├── nats.go
-│   │       └── rabbitmq.go
+│   │       ├── rabbitmq.go
+│   │       └── pubsub.go
 │   └── ui/                   # User interface layer
 │       ├── components/
 │       │   ├── dialogs.go
@@ -239,8 +302,9 @@ This project is under the MIT license. See the `LICENSE` file for more details.
 
 ## 🙏 Acknowledgments
 
-- [NATS.io](https://nats.io/) - Primary messaging system implementation
-- [RabbitMQ](https://www.rabbitmq.com/) - Alternative messaging system support
+- [NATS.io](https://nats.io/) - High-performance messaging system implementation
+- [RabbitMQ](https://www.rabbitmq.com/) - Robust AMQP messaging platform
+- [Google Cloud Pub/Sub](https://cloud.google.com/pubsub) - Enterprise messaging service
 - [Fyne](https://fyne.io/) - Excellent Go GUI framework
 - [Dracula Theme](https://draculatheme.com/) - Inspiration for the dark theme
 - [SQLite](https://www.sqlite.org/) - Reliable embedded database
