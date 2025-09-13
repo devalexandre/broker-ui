@@ -77,3 +77,20 @@ func (r *ServerRepository) GetAll() ([]models.Server, error) {
 
 	return servers, nil
 }
+
+// Delete removes a server from the database
+func (r *ServerRepository) Delete(serverID int) error {
+	stmt, err := r.db.Prepare("DELETE FROM servers WHERE id = ?")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(serverID)
+	if err != nil {
+		return err
+	}
+
+	log.Println("Server deleted:", serverID)
+	return nil
+}
