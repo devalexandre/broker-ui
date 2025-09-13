@@ -3,7 +3,4 @@
   Name = "BrokerUI"
   ID = "broker.ui"
   Version = "0.0.4"
-  Build = 4
-  
-[Migrations]
-  fyneDo = true
+  Build = 5
