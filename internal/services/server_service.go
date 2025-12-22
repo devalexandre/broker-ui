@@ -85,6 +85,12 @@ func (s *ServerService) GetMessagingProvider(serverID int) (messaging.MessagingP
 	return provider, ok
 }
 
+// IsConnected returns true if a messaging provider exists for the server.
+func (s *ServerService) IsConnected(serverID int) bool {
+	_, ok := s.messagingProviders[serverID]
+	return ok
+}
+
 // GetTopicsForServer returns all topics for a server
 func (s *ServerService) GetTopicsForServer(serverID int) ([]models.Topic, error) {
 	return s.topicRepo.GetByServerID(serverID)
@@ -103,4 +109,12 @@ func (s *ServerService) GetSupportedProviders() []string {
 		result[i] = string(provider)
 	}
 	return result
+}
+
+// DetectProviderFromURL attempts to infer the provider type from a connection URL.
+func (s *ServerService) DetectProviderFromURL(url string) messaging.ProviderType {
+	if f, ok := s.providerFactory.(*providers.Factory); ok {
+		return f.DetectProviderFromURL(url)
+	}
+	return messaging.ProviderNATS
 }

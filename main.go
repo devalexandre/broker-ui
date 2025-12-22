@@ -24,18 +24,20 @@ func main() {
 	mainWindow := views.NewMainWindow(db)
 
 	// Setup self-update (commented out for now to simplify testing)
-	setupSelfUpdate(mainWindow.GetApp(), mainWindow.GetWindow())
+	selfManage(mainWindow.GetApp(), mainWindow.GetWindow())
 
 	// Run the application
 	mainWindow.Run()
 }
 
-func setupSelfUpdate(app fyne.App, window fyne.Window) {
+// selfManage turns on automatic updates
+func selfManage(a fyne.App, w fyne.Window) {
 	publicKey := ed25519.PublicKey{226, 162, 120, 210, 212, 122, 98, 250, 123, 180, 135, 69, 168, 77, 125, 41, 229, 245, 5, 32, 82, 254, 3, 37, 24, 224, 244, 63, 161, 123, 212, 197}
 
+	// The public key above matches the signature of the below file served by our CDN
 	httpSource := selfupdate.NewHTTPSource(nil, "https://geoffrey-artefacts.fynelabs.com/self-update/5d/5de43cb1-be73-4588-9c48-b2acb6169de0/{{.OS}}-{{.Arch}}/{{.Executable}}{{.Ext}}")
 
-	config := fyneselfupdate.NewConfigWithTimeout(app, window, time.Minute, httpSource, selfupdate.Schedule{FetchOnStart: true, Interval: time.Hour * 12}, publicKey)
+	config := fyneselfupdate.NewConfigWithTimeout(a, w, time.Minute, httpSource, selfupdate.Schedule{FetchOnStart: true, Interval: time.Hour * 12}, publicKey)
 
 	_, err := selfupdate.Manage(config)
 	if err != nil {

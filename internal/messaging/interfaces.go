@@ -36,6 +36,7 @@ const (
 	ProviderKafka    ProviderType = "Kafka"
 	ProviderRedis    ProviderType = "Redis"
 	ProviderPubSub   ProviderType = "PUBSUB"
+	ProviderMQTT     ProviderType = "MQTT"
 )
 
 // ProviderFactory creates messaging providers

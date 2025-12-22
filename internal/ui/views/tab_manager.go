@@ -2,17 +2,23 @@ package views
 
 import (
 	"fmt"
+	"image/color"
 	"log"
+	"strconv"
+	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/devalexandre/broker-ui/internal/messaging"
 	"github.com/devalexandre/broker-ui/internal/models"
 	"github.com/devalexandre/broker-ui/internal/services"
 	"github.com/devalexandre/broker-ui/internal/ui/components"
+	"github.com/devalexandre/broker-ui/internal/ui/components/charts"
 )
 
 type TabManager struct {
@@ -20,6 +26,13 @@ type TabManager struct {
 	messageService *services.MessageService
 	serverService  *services.ServerService
 	window         fyne.Window
+	dashboardStop  chan struct{}
+	auditStop      chan struct{}
+}
+
+type dashboardSubMetric struct {
+	bar        *widget.ProgressBar
+	countLabel *widget.Label
 }
 
 // NewTabManager creates a new tab manager
@@ -41,16 +54,16 @@ func (tm *TabManager) GetTabContainer() *container.AppTabs {
 func (tm *TabManager) ShowWelcome() {
 	markdownContent := `# Welcome to Broker UI
 
-This application allows you to connect to **NATS** , **RabbitMQ** , and other message brokers,
+Connect to multiple message brokers and **publish / subscribe** with a unified UI.
 
+## Quick start
+1. **Add Server**
+2. Select a server from the list
+3. Create **Publisher** and **Subscriber** tabs
 
-create topics, and subscribe to subjects.
-
-- **Add Server**: Add a new server connection.
-- **Topics**: Publish messages to topics.
-- **Subscriptions**: Receive messages from subjects.
-
-Developed by [Alexandre E Souza](https://www.linkedin.com/in/devevantelista)
+## Supported brokers
+- NATS, RabbitMQ, Google Pub/Sub
+- Redis (Pub/Sub), MQTT (QoS 0)
 `
 	welcomeMessage := widget.NewRichTextFromMarkdown(markdownContent)
 	welcomeTab := container.NewTabItem("Welcome", welcomeMessage)
@@ -59,6 +72,14 @@ Developed by [Alexandre E Souza](https://www.linkedin.com/in/devevantelista)
 
 // ClearTabs removes all tabs
 func (tm *TabManager) ClearTabs() {
+	if tm.dashboardStop != nil {
+		close(tm.dashboardStop)
+		tm.dashboardStop = nil
+	}
+	if tm.auditStop != nil {
+		close(tm.auditStop)
+		tm.auditStop = nil
+	}
 	tm.tabContainer.Items = []*container.TabItem{}
 	tm.tabContainer.Refresh()
 }
@@ -115,6 +136,9 @@ func (tm *TabManager) RefreshServerTabs(serverID int) {
 		tm.AddDashboardTab(subscriptions)
 	}
 
+	// Add audit tab
+	tm.AddAuditTab(currentServer)
+
 	tm.tabContainer.Refresh()
 	log.Printf("Refreshed tabs for server %d", serverID)
 }
@@ -144,22 +168,274 @@ func (tm *TabManager) AddServerConfigTab(server models.Server) {
 
 // AddDashboardTab adds a dashboard monitoring tab
 func (tm *TabManager) AddDashboardTab(subscriptions []models.Subscription) {
-	dashboardContainer := container.NewVBox(
-		widget.NewLabel("Message Monitoring Dashboard"),
-	)
+	if tm.dashboardStop != nil {
+		close(tm.dashboardStop)
+	}
+	tm.dashboardStop = make(chan struct{})
 
-	metrics := make(map[string]*widget.Label)
+	title := widget.NewLabelWithStyle("Message Monitoring Dashboard", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	totalLabel := widget.NewLabel("Total received: 0")
+	rateLabel := widget.NewLabel("Rate: 0 msg/s")
+
+	spark := charts.NewSparkline(60, theme.ForegroundColor(), color.NRGBA{R: 0, G: 0, B: 0, A: 0})
+
+	metrics := make(map[string]*dashboardSubMetric)
+
+	perSubContainer := container.NewVBox()
 	for _, sub := range subscriptions {
-		label := widget.NewLabel(fmt.Sprintf("Sub: %s - Messages received: 0", sub.SubName))
-		metrics[sub.SubName] = label
-		dashboardContainer.Add(label)
+		bar := widget.NewProgressBar()
+		bar.Min = 0
+		bar.Max = 1
+		bar.SetValue(0)
+
+		count := widget.NewLabel("0")
+		metrics[sub.SubName] = &dashboardSubMetric{bar: bar, countLabel: count}
+
+		row := container.NewBorder(
+			nil,
+			nil,
+			widget.NewLabel(sub.SubName),
+			count,
+			bar,
+		)
+		perSubContainer.Add(row)
 	}
 
-	dashboardTab := container.NewTabItem("Dashboard", dashboardContainer)
+	content := container.NewVBox(
+		title,
+		container.NewHBox(totalLabel, layout.NewSpacer(), rateLabel),
+		widget.NewLabelWithStyle("Msgs/s (últimos 60s)", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		spark,
+		widget.NewSeparator(),
+		widget.NewLabelWithStyle("Mensagens por subscription (relativo)", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		perSubContainer,
+	)
+
+	dashboardTab := container.NewTabItem("Dashboard", container.NewVScroll(content))
 	tm.tabContainer.Append(dashboardTab)
 
-	// Start monitoring
-	go tm.monitorMessages(metrics)
+	go tm.monitorDashboard(tm.dashboardStop, subscriptions, totalLabel, rateLabel, spark, metrics)
+}
+
+// AddAuditTab adds an audit tab (received messages history) for a server.
+func (tm *TabManager) AddAuditTab(server models.Server) {
+	if tm.auditStop != nil {
+		close(tm.auditStop)
+	}
+	tm.auditStop = make(chan struct{})
+
+	title := widget.NewLabelWithStyle("Audit (Received Messages)", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	info := widget.NewLabel("Loading…")
+
+	filterEntry := widget.NewEntry()
+	filterEntry.SetPlaceHolder("Filter by subject (contains)…")
+
+	limitSelect := widget.NewSelect([]string{"50", "100", "200"}, func(string) {})
+	limitSelect.SetSelected("100")
+
+	var refresh func()
+	var autoStop chan struct{}
+	autoRefresh := widget.NewCheck("Auto-refresh (2s)", func(enabled bool) {
+		if autoStop != nil {
+			close(autoStop)
+			autoStop = nil
+		}
+		if !enabled {
+			return
+		}
+		autoStop = make(chan struct{})
+		go func(appStop <-chan struct{}, localStop <-chan struct{}) {
+			ticker := time.NewTicker(2 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-appStop:
+					return
+				case <-localStop:
+					return
+				case <-ticker.C:
+					if refresh != nil {
+						refresh()
+					}
+				}
+			}
+		}(tm.auditStop, autoStop)
+	})
+
+	prevBtn := widget.NewButton("Prev", func() {})
+	nextBtn := widget.NewButton("Next", func() {})
+
+	refreshBtn := widget.NewButtonWithIcon("Refresh", theme.ViewRefreshIcon(), func() {
+		if refresh != nil {
+			refresh()
+		}
+	})
+
+	daysEntry := widget.NewEntry()
+	daysEntry.SetText("30")
+	daysEntry.SetPlaceHolder("Days")
+	cleanupBtn := widget.NewButtonWithIcon("Cleanup", theme.DeleteIcon(), func() {})
+
+	var (
+		messages []models.Message
+		offset   = 0
+		total    = -1
+	)
+
+	list := widget.NewList(
+		func() int { return len(messages) },
+		func() fyne.CanvasObject { return widget.NewLabel("…") },
+		func(i widget.ListItemID, o fyne.CanvasObject) {
+			if i < 0 || i >= len(messages) {
+				o.(*widget.Label).SetText("")
+				return
+			}
+			msg := messages[i]
+			payload := strings.ReplaceAll(msg.Payload, "\n", " ")
+			o.(*widget.Label).SetText(fmt.Sprintf("%s | %s | %s", msg.CreatedAt, msg.Subject, truncate(payload, 120)))
+		},
+	)
+
+	list.OnSelected = func(id widget.ListItemID) {
+		if id < 0 || id >= len(messages) {
+			return
+		}
+		msg := messages[id]
+		body := fmt.Sprintf("Subject: %s\nProvider: %s\nAt: %s\n\n%s", msg.Subject, msg.ProviderType, msg.CreatedAt, msg.Payload)
+		dialog.ShowInformation("Audit Message", body, tm.window)
+		list.Unselect(id)
+	}
+
+	refresh = func() {
+		limit, _ := strconv.Atoi(limitSelect.Selected)
+		if limit <= 0 {
+			limit = 100
+		}
+		filter := strings.TrimSpace(filterEntry.Text)
+
+		go func(curOffset int) {
+			var (
+				msgs []models.Message
+				err  error
+			)
+
+			if filter == "" {
+				msgs, err = tm.messageService.GetAuditMessages(server.ID, limit, curOffset)
+			} else {
+				msgs, err = tm.messageService.GetAuditMessagesBySubject(server.ID, filter, limit, curOffset)
+			}
+			if err != nil {
+				fyne.Do(func() { components.ErrorDialog(err, tm.window) })
+				return
+			}
+
+			t, err := tm.messageService.CountAuditMessages(server.ID)
+			if err != nil {
+				t = -1
+			}
+
+			fyne.Do(func() {
+				offset = curOffset
+				messages = msgs
+				total = t
+				list.Refresh()
+
+				from := offset + 1
+				to := offset + len(messages)
+				if len(messages) == 0 {
+					from, to = 0, 0
+				}
+
+				totalText := "?"
+				if total >= 0 {
+					totalText = strconv.Itoa(total)
+				}
+				info.SetText(fmt.Sprintf("Server: %s | Showing %d–%d of %s", server.Name, from, to, totalText))
+
+				prevBtn.Disable()
+				nextBtn.Disable()
+				if offset > 0 {
+					prevBtn.Enable()
+				}
+				if len(messages) == limit && (total < 0 || offset+limit < total) {
+					nextBtn.Enable()
+				}
+			})
+		}(offset)
+	}
+
+	prevBtn.OnTapped = func() {
+		limit, _ := strconv.Atoi(limitSelect.Selected)
+		if limit <= 0 {
+			limit = 100
+		}
+		newOffset := offset - limit
+		if newOffset < 0 {
+			newOffset = 0
+		}
+		offset = newOffset
+		refresh()
+	}
+	nextBtn.OnTapped = func() {
+		limit, _ := strconv.Atoi(limitSelect.Selected)
+		if limit <= 0 {
+			limit = 100
+		}
+		offset += limit
+		refresh()
+	}
+
+	filterEntry.OnSubmitted = func(string) {
+		offset = 0
+		refresh()
+	}
+	limitSelect.OnChanged = func(string) {
+		offset = 0
+		refresh()
+	}
+
+	cleanupBtn.OnTapped = func() {
+		days, err := strconv.Atoi(strings.TrimSpace(daysEntry.Text))
+		if err != nil || days < 1 {
+			components.ErrorDialog(fmt.Errorf("invalid days value"), tm.window)
+			return
+		}
+
+		components.ConfirmDialog(
+			"Cleanup Audit Messages",
+			fmt.Sprintf("Delete audit messages older than %d days for server '%s'?", days, server.Name),
+			func(confirmed bool) {
+				if !confirmed {
+					return
+				}
+				go func() {
+					if err := tm.messageService.CleanupOldAuditMessagesForServer(server.ID, days); err != nil {
+						fyne.Do(func() { components.ErrorDialog(err, tm.window) })
+						return
+					}
+					fyne.Do(func() {
+						offset = 0
+						refresh()
+					})
+				}()
+			},
+			tm.window,
+		).Show()
+	}
+
+	header := container.NewVBox(
+		title,
+		container.NewHBox(widget.NewLabel("Limit:"), limitSelect, layout.NewSpacer(), autoRefresh),
+		container.NewBorder(nil, nil, widget.NewLabel("Subject:"), refreshBtn, filterEntry),
+		container.NewHBox(prevBtn, nextBtn, layout.NewSpacer(), widget.NewLabel("Days:"), daysEntry, cleanupBtn),
+		info,
+		widget.NewSeparator(),
+	)
+
+	tab := container.NewTabItem("Audit", container.NewBorder(header, nil, nil, nil, list))
+	tm.tabContainer.Append(tab)
+
+	refresh()
 }
 
 // AddTopicTab adds a tab for publishing messages to a topic
@@ -186,7 +462,7 @@ func (tm *TabManager) AddTopicTab(topic models.Topic) {
 			return
 		}
 
-		err := tm.messageService.PublishMessage(provider, subject, payload)
+		err := tm.messageService.PublishMessage(provider, topic.ServerID, subject, payload)
 		if err != nil {
 			components.ErrorDialog(err, tm.window)
 			return
@@ -234,7 +510,7 @@ func (tm *TabManager) AddSubscriptionTab(subscription models.Subscription) {
 
 	// Start subscription
 	go func() {
-		err := tm.messageService.Subscribe(provider, subscription.SubName, subscription.SubjectPattern, messageChan)
+		err := tm.messageService.Subscribe(provider, subscription.ServerID, subscription.SubName, subscription.SubjectPattern, messageChan)
 		if err != nil {
 			log.Printf("Error subscribing to %s: %v", subscription.SubjectPattern, err)
 		}
@@ -338,6 +614,11 @@ func (tm *TabManager) showEditServerDialog(server models.Server) {
 	providerSelect := widget.NewSelect(supportedProviders, func(value string) {})
 	providerSelect.SetSelected(string(server.ProviderType))
 
+	urlEntry.OnChanged = func(value string) {
+		detected := tm.serverService.DetectProviderFromURL(value)
+		providerSelect.SetSelected(string(detected))
+	}
+
 	dialog := components.FormDialog(
 		"Edit Server Connection",
 		"Save",
@@ -409,13 +690,69 @@ func (tm *TabManager) removeTabByName(tabName string) {
 	tm.tabContainer.Refresh()
 }
 
-func (tm *TabManager) monitorMessages(metrics map[string]*widget.Label) {
+func (tm *TabManager) monitorDashboard(
+	stop <-chan struct{},
+	subscriptions []models.Subscription,
+	totalLabel *widget.Label,
+	rateLabel *widget.Label,
+	spark *charts.Sparkline,
+	metrics map[string]*dashboardSubMetric,
+) {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	prevTotal := 0
 	for {
-		counts := tm.messageService.GetDashboardCounts()
-		for subName, label := range metrics {
-			count := counts[subName]
-			label.SetText(fmt.Sprintf("Sub: %s - Messages received: %d", subName, count))
+		select {
+		case <-stop:
+			return
+		case <-ticker.C:
+			counts := tm.messageService.GetDashboardCounts()
+
+			total := 0
+			maxCount := 0
+			for _, sub := range subscriptions {
+				c := counts[sub.SubName]
+				total += c
+				if c > maxCount {
+					maxCount = c
+				}
+			}
+			if maxCount == 0 {
+				maxCount = 1
+			}
+
+			rate := total - prevTotal
+			prevTotal = total
+
+			fyne.Do(func() {
+				totalLabel.SetText("Total received: " + strconv.Itoa(total))
+				rateLabel.SetText("Rate: " + strconv.Itoa(rate) + " msg/s")
+				spark.Push(float64(rate))
+
+				for _, sub := range subscriptions {
+					m := metrics[sub.SubName]
+					if m == nil {
+						continue
+					}
+					c := counts[sub.SubName]
+					m.countLabel.SetText(strconv.Itoa(c))
+					m.bar.SetValue(float64(c) / float64(maxCount))
+				}
+			})
 		}
-		time.Sleep(1 * time.Second)
 	}
+}
+
+func truncate(s string, max int) string {
+	if max <= 0 {
+		return ""
+	}
+	if len(s) <= max {
+		return s
+	}
+	if max == 1 {
+		return "…"
+	}
+	return s[:max-1] + "…"
 }

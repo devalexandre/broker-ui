@@ -24,12 +24,12 @@ func (f *Factory) CreateProvider(providerType messaging.ProviderType) (messaging
 		return NewRabbitMQProvider(), nil
 	case messaging.ProviderPubSub:
 		return NewPubSubProvider(), nil
+	case messaging.ProviderMQTT:
+		return NewMQTTProvider(), nil
 	case messaging.ProviderKafka:
-		// TODO: Implement Kafka provider
-		return nil, fmt.Errorf("Kafka provider not implemented yet")
+		return NewKafkaProvider(), nil
 	case messaging.ProviderRedis:
-		// TODO: Implement Redis provider
-		return nil, fmt.Errorf("Redis provider not implemented yet")
+		return NewRedisProvider(), nil
 	default:
 		return nil, fmt.Errorf("unsupported provider type: %s", providerType)
 	}
@@ -41,8 +41,9 @@ func (f *Factory) GetSupportedProviders() []messaging.ProviderType {
 		messaging.ProviderNATS,
 		messaging.ProviderRabbitMQ,
 		messaging.ProviderPubSub,
-		// messaging.ProviderKafka,    // TODO: Uncomment when implemented
-		// messaging.ProviderRedis,    // TODO: Uncomment when implemented
+		messaging.ProviderRedis,
+		messaging.ProviderMQTT,
+		messaging.ProviderKafka,
 	}
 }
 
@@ -57,6 +58,18 @@ func (f *Factory) DetectProviderFromURL(url string) messaging.ProviderType {
 
 	if strings.HasPrefix(url, "amqp://") || strings.HasPrefix(url, "amqps://") || strings.Contains(url, ":5672") {
 		return messaging.ProviderRabbitMQ
+	}
+
+	if strings.HasPrefix(url, "redis://") || strings.HasPrefix(url, "rediss://") || strings.Contains(url, ":6379") {
+		return messaging.ProviderRedis
+	}
+
+	if strings.HasPrefix(url, "mqtt://") || strings.HasPrefix(url, "mqtts://") || strings.Contains(url, ":1883") || strings.Contains(url, ":8883") {
+		return messaging.ProviderMQTT
+	}
+
+	if strings.HasPrefix(url, "kafka://") || strings.Contains(url, ":9092") || strings.Contains(url, ":19092") {
+		return messaging.ProviderKafka
 	}
 
 	// Check for Pub/Sub patterns

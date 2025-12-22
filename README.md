@@ -17,9 +17,9 @@ The application has been completely refactored with a **pluggable messaging arch
 | **NATS** | ✅ **Fully Implemented** | Wildcards (`*`, `>`), Real-time Pub/Sub, Authentication |
 | **RabbitMQ** | ✅ **Fully Implemented** | Exchanges, Routing Keys, Queues, AMQP 0.9.1 |
 | **Google Cloud Pub/Sub** | ✅ **Fully Implemented** | Topics, Subscriptions, Emulator Support, GCP Production |
-| **Kafka** | 📋 **Planned** | Topics, Partitions, Consumer Groups |
-| **Redis** | 📋 **Planned** | Pub/Sub, Streams |
-| **MQTT** | 📋 **Planned** | IoT Messaging |
+| **Kafka** | ✅ **Implemented (basic)** | Publish/Subscribe via consumer group |
+| **Redis** | ✅ **Implemented (Pub/Sub)** | Pub/Sub (PUBLISH/SUBSCRIBE/PSUBSCRIBE) |
+| **MQTT** | ✅ **Implemented (QoS 0)** | Publish/Subscribe, mqtt:// and mqtts:// |
 
 ## 🚀 Features 
 
@@ -64,6 +64,7 @@ The application has been completely refactored with a **pluggable messaging arch
 - **SQLite Database**: Local storage of all configurations
 - **Auto-migration**: Automatic database schema updates
 - **Automatic Backup**: Data preserved between sessions
+- **Audit (Received Messages)**: History view with filter/pagination and cleanup
 
 ### 🔄 Automatic Updates
 - **Self-Update**: Integrated automatic update system
@@ -115,7 +116,7 @@ The application has been completely refactored with a **pluggable messaging arch
 git clone https://github.com/devalexandre/broker-ui.git
 cd broker-ui
 
-# Start messaging servers (NATS, RabbitMQ, and Pub/Sub Emulator)
+# Start messaging servers (NATS, RabbitMQ, Pub/Sub Emulator, Redis, MQTT, Kafka)
 docker-compose up -d
 
 # Build and run the application
@@ -138,16 +139,23 @@ go build -o broker-ui
 - **RabbitMQ**: `admin:admin123@localhost:5672/`
 - **Google Cloud Pub/Sub (Emulator)**: `localhost:8085`
 - **Google Cloud Pub/Sub (Production)**: `my-project-id` or `gcp://my-project-id`
+- **Redis**: `localhost:6379`
+- **MQTT**: `localhost:1883`
+- **Kafka**: `localhost:19092`
 
 **Full URLs (also supported):**
 - **NATS**: `nats://localhost:4222`
 - **RabbitMQ**: `amqp://admin:admin123@localhost:5672/`
 - **Pub/Sub**: Auto-detected based on URL pattern
+- **Redis**: `redis://localhost:6379/0`
+- **MQTT**: `mqtt://localhost:1883?client_id=broker-ui&keepalive=30`
+- **Kafka**: `kafka://localhost:19092?group=broker-ui&start=latest`
 
 ### Management Interfaces
 - **NATS Monitoring**: http://localhost:8222
 - **RabbitMQ Management**: http://localhost:15672 (admin/admin123)
 - **Pub/Sub Emulator**: Runs on localhost:8085 (no web interface)
+- **Redpanda (Kafka) Admin API**: http://localhost:9644
 
 ### Google Cloud Pub/Sub Setup
 
@@ -177,7 +185,7 @@ For production GCP connections:
 
 ### 1. Connect to a Messaging Server
 1. Click "Add Server"
-2. Select the messaging provider (NATS, RabbitMQ, PUBSUB)
+2. Select the messaging provider (NATS, RabbitMQ, PUBSUB, Redis, MQTT, Kafka)
 3. Enter server name and connection URL:
    - **NATS**: `localhost:4222` or `nats://localhost:4222`
    - **RabbitMQ**: `admin:admin123@localhost:5672/` or `amqp://admin:admin123@localhost:5672/`

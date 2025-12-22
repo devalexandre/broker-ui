@@ -25,9 +25,15 @@ type Subscription struct {
 	SubjectPattern string
 }
 
-// Message represents a message sent or received
+// Message represents a message received from external sources for audit purposes
+// Only incoming messages are stored, not messages sent by this Broker UI instance
 type Message struct {
-	Subject   string
-	Payload   string
-	Timestamp string
+	ID           int    `json:"id"`
+	ServerID     int    `json:"server_id"`
+	Subject      string `json:"subject"`
+	Payload      string `json:"payload"`
+	ProviderType string `json:"provider_type"`
+	Direction    string `json:"direction"` // "received" (sent messages are not stored)
+	Timestamp    int64  `json:"timestamp"`
+	CreatedAt    string `json:"created_at"`
 }

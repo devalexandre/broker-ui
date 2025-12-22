@@ -4,14 +4,17 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/devalexandre/broker-ui/internal/database"
 	"github.com/devalexandre/broker-ui/internal/messaging"
+	"github.com/devalexandre/broker-ui/internal/models"
 )
 
 type MessageService struct {
 	topicRepo        *database.TopicRepository
 	subscriptionRepo *database.SubscriptionRepository
+	messageRepo      *database.MessageRepository
 	sentMessages     map[string][]string
 	receivedMessages map[string][]string
 	dashboardCounts  map[string]int
@@ -19,10 +22,11 @@ type MessageService struct {
 }
 
 // NewMessageService creates a new message service
-func NewMessageService(topicRepo *database.TopicRepository, subscriptionRepo *database.SubscriptionRepository) *MessageService {
+func NewMessageService(topicRepo *database.TopicRepository, subscriptionRepo *database.SubscriptionRepository, messageRepo *database.MessageRepository) *MessageService {
 	return &MessageService{
 		topicRepo:        topicRepo,
 		subscriptionRepo: subscriptionRepo,
+		messageRepo:      messageRepo,
 		sentMessages:     make(map[string][]string),
 		receivedMessages: make(map[string][]string),
 		dashboardCounts:  make(map[string]int),
@@ -50,7 +54,7 @@ func (s *MessageService) DeleteSubscription(subName string, serverID int) error 
 }
 
 // PublishMessage publishes a message to a topic
-func (s *MessageService) PublishMessage(provider messaging.MessagingProvider, subject, payload string) error {
+func (s *MessageService) PublishMessage(provider messaging.MessagingProvider, serverID int, subject, payload string) error {
 	if payload == "" {
 		return nil
 	}
@@ -62,16 +66,19 @@ func (s *MessageService) PublishMessage(provider messaging.MessagingProvider, su
 
 	log.Printf("Sending message to topic %s: %s", subject, payload)
 
-	// Store sent message
+	// Store sent message in memory for UI display
 	s.mutex.Lock()
 	s.sentMessages[subject] = append(s.sentMessages[subject], payload)
 	s.mutex.Unlock()
+
+	// Note: We don't save sent messages to database - only received messages are audited
+	// This avoids duplicating messages we send ourselves and focuses on external messages
 
 	return nil
 }
 
 // Subscribe subscribes to a subject pattern
-func (s *MessageService) Subscribe(provider messaging.MessagingProvider, subName, subjectPattern string, messageChan chan<- string) error {
+func (s *MessageService) Subscribe(provider messaging.MessagingProvider, serverID int, subName, subjectPattern string, messageChan chan<- string) error {
 	s.mutex.Lock()
 	s.receivedMessages[subName] = []string{}
 	s.mutex.Unlock()
@@ -86,6 +93,21 @@ func (s *MessageService) Subscribe(provider messaging.MessagingProvider, subName
 		s.receivedMessages[subName] = append(s.receivedMessages[subName], message)
 		s.dashboardCounts[subName]++
 		s.mutex.Unlock()
+
+		// Save to database for audit
+		auditMessage := &models.Message{
+			ServerID:     serverID,
+			Subject:      subject,
+			Payload:      payload,
+			ProviderType: string(provider.GetProviderType()),
+			Direction:    "received",
+			Timestamp:    time.Now().Unix(),
+		}
+
+		if err := s.messageRepo.SaveMessage(auditMessage); err != nil {
+			log.Printf("Failed to save received message to database: %v", err)
+			// Don't interrupt message processing due to audit failure
+		}
 
 		// Send to channel if provided
 		if messageChan != nil {
@@ -123,4 +145,34 @@ func (s *MessageService) GetDashboardCounts() map[string]int {
 		result[k] = v
 	}
 	return result
+}
+
+// GetAuditMessages returns audit messages for a specific server
+func (s *MessageService) GetAuditMessages(serverID int, limit int, offset int) ([]models.Message, error) {
+	return s.messageRepo.GetMessagesByServer(serverID, limit, offset)
+}
+
+// GetAuditMessagesBySubject returns audit messages filtered by subject pattern
+func (s *MessageService) GetAuditMessagesBySubject(serverID int, subjectPattern string, limit int, offset int) ([]models.Message, error) {
+	return s.messageRepo.GetMessagesBySubject(serverID, subjectPattern, limit, offset)
+}
+
+// GetRecentAuditMessages returns the most recent audit messages across all servers
+func (s *MessageService) GetRecentAuditMessages(limit int) ([]models.Message, error) {
+	return s.messageRepo.GetRecentMessages(limit)
+}
+
+// CountAuditMessages returns the total count of audit messages for a server
+func (s *MessageService) CountAuditMessages(serverID int) (int, error) {
+	return s.messageRepo.CountMessagesByServer(serverID)
+}
+
+// CleanupOldAuditMessages removes audit messages older than specified days
+func (s *MessageService) CleanupOldAuditMessages(daysOld int) error {
+	return s.messageRepo.DeleteOldMessages(daysOld)
+}
+
+// CleanupOldAuditMessagesForServer removes audit messages older than specified days for a server.
+func (s *MessageService) CleanupOldAuditMessagesForServer(serverID int, daysOld int) error {
+	return s.messageRepo.DeleteOldMessagesByServer(serverID, daysOld)
 }

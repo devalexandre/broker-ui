@@ -17,6 +17,42 @@ services:
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./assets/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+
+  redpanda:
+    image: redpandadata/redpanda:v24.2.14
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp
+      - "1"
+      - --memory
+      - 1G
+      - --reserve-memory
+      - 0M
+      - --node-id
+      - "0"
+      - --check=false
+      - --kafka-addr
+      - PLAINTEXT://0.0.0.0:9092,OUTSIDE://0.0.0.0:19092
+      - --advertise-kafka-addr
+      - PLAINTEXT://redpanda:9092,OUTSIDE://localhost:19092
+    ports:
+      - "19092:19092" # Kafka (host)
+      - "9644:9644"   # Admin API
+
   pubsub-emulator:
     image: google/cloud-sdk:latest # You can use the official gcloud SDK image
     command: gcloud beta emulators pubsub start --project=dev-local --host-port=0.0.0.0:8085
@@ -28,3 +64,4 @@ services:
       PUBSUB_PROJECT_ID: "dev-local"
 volumes:
   rabbitmq_data:
+  mosquitto_data:
