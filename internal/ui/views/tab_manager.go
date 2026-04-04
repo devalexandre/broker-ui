@@ -22,6 +22,12 @@ type TabManager struct {
 	window         fyne.Window
 }
 
+func newWrappedMessageLabel(text string) *widget.Label {
+	label := widget.NewLabel(text)
+	label.Wrapping = fyne.TextWrapBreak
+	return label
+}
+
 // NewTabManager creates a new tab manager
 func NewTabManager(messageService *services.MessageService, serverService *services.ServerService, window fyne.Window) *TabManager {
 	return &TabManager{
@@ -192,7 +198,7 @@ func (tm *TabManager) AddTopicTab(topic models.Topic) {
 			return
 		}
 
-		messageContainer.Add(widget.NewLabel(payload))
+		messageContainer.Add(newWrappedMessageLabel(payload))
 		messageContainer.Refresh()
 		messageEntry.SetText("")
 	})
@@ -243,7 +249,7 @@ func (tm *TabManager) AddSubscriptionTab(subscription models.Subscription) {
 	// Monitor messages
 	go func() {
 		for payload := range messageChan {
-			messageContainer.Add(widget.NewLabel(payload))
+			messageContainer.Add(newWrappedMessageLabel(payload))
 			messageContainer.Refresh()
 		}
 	}()
